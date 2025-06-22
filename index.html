@@ -1,54 +1,46 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Wallet Generator</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h2>Tạo ví Ethereum</h2>
-  <button onclick="generateWallet()">Tạo ví ngẫu nhiên</button>
-  <br><br>
-  <input type="file" id="targetFile" />
-  <br><br>
-  <div id="result"></div>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4 py-10">
 
-  <script>
-    let targetAddresses = [];
+  <div class="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-xl space-y-6">
+    <h2 class="text-2xl font-bold text-gray-800 text-center">Tạo Ví Ethereum</h2>
 
-    document.getElementById("targetFile").addEventListener("change", function(event) {
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        targetAddresses = e.target.result.split(/\r?\n/).map(s => s.trim().toLowerCase());
-        alert("Tải file target thành công!");
-      };
-      reader.readAsText(event.target.files[0]);
-    });
+    <div class="space-y-4">
+      <label class="block text-gray-700 font-medium">Chọn cách tạo ví:</label>
+      <div class="space-y-2">
+        <label class="flex items-center space-x-2">
+          <input type="radio" name="method" value="random" checked class="form-radio text-blue-500" />
+          <span>Ngẫu nhiên</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input type="radio" name="method" value="privatekey" class="form-radio text-blue-500" />
+          <span>Nhập Private Key</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input type="radio" name="method" value="mnemonic" class="form-radio text-blue-500" />
+          <span>Nhập Mnemonic Phrase</span>
+        </label>
+      </div>
 
-    async function generateWallet() {
-      const wallet = ethers.Wallet.createRandom();
-      const textContent = `Address: ${wallet.address}\nPrivate Key: ${wallet.privateKey}`;
-      const blob = new Blob([textContent], { type: "text/plain" });
+      <div id="inputArea" class="mt-4 hidden">
+        <textarea id="inputValue" rows="3" placeholder="Nhập Private Key hoặc Mnemonic" class="w-full p-2 border rounded-lg"></textarea>
+      </div>
 
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `wallet_${wallet.address.slice(2, 8)}.txt`;
-      link.textContent = "Tải wallet";
+      <button onclick="createWallet()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition">
+        Tạo và tải ví
+      </button>
+    </div>
 
-      let result = document.getElementById("result");
-      result.innerHTML = `<p>Địa chỉ: ${wallet.address}</p>`;
-      result.appendChild(link);
+    <div id="walletInfo" class="text-sm text-gray-700 mt-4"></div>
+  </div>
 
-      if (targetAddresses.includes(wallet.address.toLowerCase())) {
-        const matchBlob = new Blob([textContent], { type: "text/plain" });
-        const matchLink = document.createElement("a");
-        matchLink.href = URL.createObjectURL(matchBlob);
-        matchLink.download = "match.txt";
-        matchLink.textContent = "🎯 Ví này trùng! Tải match.txt";
-        result.appendChild(document.createElement("br"));
-        result.appendChild(matchLink);
-        alert("🎉 Trùng ví target!");
-      }
-    }
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
