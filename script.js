@@ -49,7 +49,7 @@ function renderInputArea(method) {
 renderInputArea(selectedMethod);
 
 // === Placeholder for Wallet Store ===
-let walletStore = [];
+let walletStore = JSON.parse(localStorage.getItem("walletStore") || "[]");
 let matchList = [];
 
 // === Load targets.txt từ GitHub ===
@@ -149,3 +149,33 @@ generateBtn.addEventListener("click", async () => {
     outputArea.innerHTML = `<p class='text-red-600'>Lỗi: ${err.message}</p>`;
   }
 });
+const walletListEl = document.getElementById("walletList");
+
+function renderWalletList() {
+  if (!walletStore.length) {
+    walletListEl.innerHTML = "<p>Không có ví nào được lưu.</p>";
+    return;
+  }
+
+  walletListEl.innerHTML = walletStore.map((w, i) => `
+    <div class="border p-2 rounded my-2">
+      <p><strong>Address:</strong> ${w.address}</p>
+      <p><strong>Private Key:</strong> ${w.privateKey}</p>
+      <button onclick="deleteWallet(${i})" class="text-red-600">Xóa</button>
+    </div>
+  `).join("");
+}
+
+function deleteWallet(index) {
+  walletStore.splice(index, 1);
+  localStorage.setItem("walletStore", JSON.stringify(walletStore));
+  renderWalletList();
+}
+function showTab(id) {
+  document.querySelectorAll(".tab").forEach(tab => tab.style.display = "none");
+  document.getElementById(id).style.display = "block";
+
+  if (id === "manager") {
+    renderWalletList();
+  }
+}
