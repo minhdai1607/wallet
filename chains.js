@@ -1,4 +1,4 @@
-export const CHAINS = {
+export const DEFAULT_CHAINS = {
   ETH: [
     "https://mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24",
     "https://mainnet.infura.io/v3/36f9fafb00d5417485f570a9eaccba98",
@@ -14,3 +14,16 @@ export const CHAINS = {
     "https://arbitrum.llamarpc.com"
   ]
 };
+
+// Hàm trả về toàn bộ chain + RPC đã được thêm vào localStorage
+export function getMergedChains() {
+  const custom = JSON.parse(localStorage.getItem("customRPC") || "{}");
+  const merged = structuredClone(DEFAULT_CHAINS); // copy tránh ảnh hưởng gốc
+
+  for (let chain in custom) {
+    if (!merged[chain]) merged[chain] = [];
+    merged[chain].push(...custom[chain]);
+  }
+
+  return merged;
+}
