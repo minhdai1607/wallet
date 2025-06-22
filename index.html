@@ -1,40 +1,55 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Ethereum Wallet Generator</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
 </head>
 <body>
   <div class="container">
-    <h1>Tạo Ethereum Wallet</h1>
-    <form id="walletForm">
-      <div>
-        <label>Chọn phương pháp tạo ví:</label><br>
-        <label><input type="radio" name="method" value="random" checked> Random Range</label>
-        <label><input type="radio" name="method" value="privatekey"> Private Key</label>
-        <label><input type="radio" name="method" value="mnemonic"> Mnemonic</label>
-      </div>
-      <div id="inputArea" class="mt-4"></div>
+    <h1>Ethereum Wallet Generator</h1>
+    <nav>
+      <button onclick="showTab('generator')">Tạo ví</button>
+      <button onclick="showTab('manager')">Quản lý ví</button>
+      <button onclick="showTab('balance')">Check Balance</button>
+    </nav>
 
-      <div class="mt-4">
-        <label>Số lượng wallet cần tạo:</label><br>
-        <input type="number" id="walletCount" class="input" placeholder="VD: 1000" value="1000">
-      </div>
+    <div id="generator" class="tab">
+      <form id="walletForm">
+        <div>
+          <label>Chọn phương pháp tạo ví:</label><br>
+          <label><input type="radio" name="method" value="random" checked> Random Range</label>
+          <label><input type="radio" name="method" value="privatekey"> Private Key</label>
+          <label><input type="radio" name="method" value="mnemonic"> Mnemonic</label>
+        </div>
+        <div id="inputArea" class="mt-4"></div>
+        <div class="mt-4">
+          <label>Số lượng ví cần tạo:</label>
+          <input type="number" id="walletCount" class="input" value="1000" />
+        </div>
+        <div class="mt-4">
+          <label>Số lượng worker:</label>
+          <input type="number" id="workerCount" class="input" value="4" />
+        </div>
+        <div class="mt-4">
+          <button type="button" id="generateBtn" class="btn">Tạo ví</button>
+        </div>
+      </form>
+      <div id="outputArea" class="mt-6"></div>
+    </div>
 
-      <div class="mt-4">
-        <label>Số lượng worker:</label><br>
-        <input type="number" id="workerCount" class="input" placeholder="VD: 4" value="4">
-      </div>
+    <div id="manager" class="tab" style="display: none;">
+      <h2>Quản lý ví</h2>
+      <div id="walletList"></div>
+    </div>
 
-      <div class="mt-4">
-        <button type="button" id="generateBtn" class="btn">Tạo Wallet</button>
-      </div>
-    </form>
-
-    <div id="outputArea" class="mt-6"></div>
+    <div id="balance" class="tab" style="display: none;">
+      <h2>Kiểm tra số dư</h2>
+      <div id="balanceUI"></div>
+    </div>
   </div>
   <script type="module" src="script.js"></script>
 </body>

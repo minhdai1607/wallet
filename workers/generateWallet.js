@@ -1,40 +1,42 @@
-// generateWallet.js
-// Tạo ví theo từng phương thức: random, private key, mnemonic
 
-// Hàm tạo ví random
-export function generateWalletRandom() {
-  const wallet = ethers.Wallet.createRandom();
-  return {
-    address: wallet.address,
-    privateKey: wallet.privateKey
-  };
-}
+self.importScripts("https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js");
 
-// Hàm tạo ví từ private key
-export function generateWalletFromPrivateKey(privateKey) {
+self.onmessage = function (e) {
+  const { method, chunkSize, range, keys, mnemonic, length } = e.data;
+  const wallets = [];
+
   try {
-    const wallet = new ethers.Wallet(privateKey);
-    return {
-      address: wallet.address,
-      privateKey: wallet.privateKey
-    };
-  } catch (err) {
-    console.warn("Private key không hợp lệ:", privateKey);
-    return null;
-  }
-}
+    if (method === "random") {
+      for (let i = 0; i < chunkSize; i++) {
+        const wallet = ethers.Wallet.createRandom();
+        wallets.push({ address: wallet.address, privateKey: wallet.privateKey });
+      }
 
-// Hàm tạo ví từ mnemonic (nếu có), hoặc tạo mới
-export function generateWalletFromMnemonic(mnemonicPhrase) {
-  try {
-    const mnemonic = ethers.Mnemonic.fromPhrase(mnemonicPhrase);
-    const wallet = ethers.HDNodeWallet.fromMnemonic(mnemonic);
-    return {
-      address: wallet.address,
-      privateKey: wallet.privateKey
-    };
+    } else if (method === "privatekey") {
+      for (let key of keys || []) {
+        try {
+          const wallet = new ethers.Wallet(key);
+          wallets.push({ address: wallet.address, privateKey: wallet.privateKey });
+        } catch {}
+      }
+
+    } else if (method === "mnemonic") {
+      for (let i = 0; i < chunkSize; i++) {
+        try {
+          let wallet;
+          if (mnemonic) {
+            const m = ethers.Mnemonic.fromPhrase(mnemonic);
+            wallet = ethers.HDNodeWallet.fromMnemonic(m);
+          } else {
+            wallet = ethers.Wallet.createRandom();
+          }
+          wallets.push({ address: wallet.address, privateKey: wallet.privateKey });
+        } catch {}
+      }
+    }
+
+    self.postMessage(wallets);
   } catch (err) {
-    console.warn("Mnemonic không hợp lệ:", mnemonicPhrase);
-    return null;
+    self.postMessage([]);
   }
-}
+};
