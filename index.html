@@ -1,46 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Wallet Generator</title>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ethereum Wallet Generator</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center px-4 py-10">
+<body>
+  <div class="container">
+    <h1>Tạo Ethereum Wallet</h1>
+    <form id="walletForm">
+      <div>
+        <label>Chọn phương pháp tạo ví:</label><br>
+        <label><input type="radio" name="method" value="random" checked> Random Range</label>
+        <label><input type="radio" name="method" value="privatekey"> Private Key</label>
+        <label><input type="radio" name="method" value="mnemonic"> Mnemonic</label>
+      </div>
+      <div id="inputArea" class="mt-4"></div>
 
-  <div class="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-xl space-y-6">
-    <h2 class="text-2xl font-bold text-gray-800 text-center">Tạo Ví Ethereum</h2>
-
-    <div class="space-y-4">
-      <label class="block text-gray-700 font-medium">Chọn cách tạo ví:</label>
-      <div class="space-y-2">
-        <label class="flex items-center space-x-2">
-          <input type="radio" name="method" value="random" checked class="form-radio text-blue-500" />
-          <span>Ngẫu nhiên</span>
-        </label>
-        <label class="flex items-center space-x-2">
-          <input type="radio" name="method" value="privatekey" class="form-radio text-blue-500" />
-          <span>Nhập Private Key</span>
-        </label>
-        <label class="flex items-center space-x-2">
-          <input type="radio" name="method" value="mnemonic" class="form-radio text-blue-500" />
-          <span>Nhập Mnemonic Phrase</span>
-        </label>
+      <div class="mt-4">
+        <label>Số lượng wallet cần tạo:</label><br>
+        <input type="number" id="walletCount" class="input" placeholder="VD: 1000" value="1000">
       </div>
 
-      <div id="inputArea" class="mt-4 hidden">
-        <textarea id="inputValue" rows="3" placeholder="Nhập Private Key hoặc Mnemonic" class="w-full p-2 border rounded-lg"></textarea>
+      <div class="mt-4">
+        <label>Số lượng worker:</label><br>
+        <input type="number" id="workerCount" class="input" placeholder="VD: 4" value="4">
       </div>
 
-      <button onclick="createWallet()" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition">
-        Tạo và tải ví
-      </button>
-    </div>
+      <div class="mt-4">
+        <button type="button" id="generateBtn" class="btn">Tạo Wallet</button>
+      </div>
+    </form>
 
-    <div id="walletInfo" class="text-sm text-gray-700 mt-4"></div>
+    <div id="outputArea" class="mt-6"></div>
   </div>
-
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>
