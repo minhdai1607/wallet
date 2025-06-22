@@ -174,8 +174,128 @@ function deleteWallet(index) {
 function showTab(id) {
   document.querySelectorAll(".tab").forEach(tab => tab.style.display = "none");
   document.getElementById(id).style.display = "block";
-
+  if (id === "balance") {
+    renderRpcList(); // cập nhật danh sách RPC mỗi lần mở tab
+  }
   if (id === "manager") {
     renderWalletList();
   }
 }
+import { CHAINS } from './chains.js';
+
+const checkBtn = document.getElementById("checkBalanceBtn");
+const resultEl = document.getElementById("balanceResult");
+
+checkBtn.addEventListener("click", async () => {
+  const workerCount = parseInt(document.getElementById("balanceWorker").value);
+  if (!workerCount || workerCount <= 0) return alert("Vui lòng nhập số worker hợp lệ.");
+
+  if (!walletStore.length) return alert("Không có ví nào để kiểm tra.");
+
+  resultEl.innerHTML = "Đang kiểm tra số dư...";
+
+  const allResults = [];
+
+  const chainEntries = Object.entries(getMergedChains());
+  for (const [chainName, rpcs] of chainEntries) {
+    const rpc = rpcs[0]; // lấy RPC đầu tiên
+    const chunkSize = Math.ceil(walletStore.length / workerCount);
+    const promises = [];
+
+    for (let i = 0; i < workerCount; i++) {
+      const chunk = walletStore.slice(i * chunkSize, (i + 1) * chunkSize);
+      const worker = new Worker("./workers/checkBalance.js");
+
+      worker.postMessage({ wallets: chunk, rpc });
+
+      const p = new Promise((res) => {
+        worker.onmessage = (e) => {
+          res(e.data);
+          worker.terminate();
+        };
+      });
+
+      promises.push(p);
+    }
+
+    const results = (await Promise.all(promises)).flat();
+    allResults.push(...results);
+  }
+
+  // Lọc ví có balance > 0
+  walletStore = allResults;
+  localStorage.setItem("walletStore", JSON.stringify(walletStore));
+  renderWalletList();
+
+  if (walletStore.length === 0) {
+    resultEl.innerHTML = "Không có ví nào có số dư > 0";
+  } else {
+    let html = `<p>✅ Tìm thấy ${walletStore.length} ví có balance > 0:</p><ul>`;
+    walletStore.forEach(w => {
+      html += `<li>${w.address} — ${w.balance} ETH</li>`;
+    });
+    html += "</ul>";
+
+    const content = walletStore.map(w => `${w.address} - ${w.privateKey}`).join("\n");
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    html += `<a href="${url}" download="wallet_with_balance.txt" class="text-blue-600 underline">Tải file kết quả</a>`;
+    resultEl.innerHTML = html;
+  }
+});
+import { getMergedChains } from "./chains.js";
+
+// Thêm RPC từ UI
+document.getElementById("addRpcBtn").addEventListener("click", () => {
+  const chain = document.getElementById("rpcChainSelect").value;
+  const rpc = document.getElementById("rpcInput").value.trim();
+  const msg = document.getElementById("rpcMessage");
+
+  if (!rpc.startsWith("http")) {
+    msg.innerText = "❌ RPC không hợp lệ.";
+    msg.style.color = "red";
+    return;
+  }
+
+  const storage = JSON.parse(localStorage.getItem("customRPC") || "{}");
+  if (!storage[chain]) storage[chain] = [];
+  if (!storage[chain].includes(rpc)) {
+    storage[chain].push(rpc);
+    localStorage.setItem("customRPC", JSON.stringify(storage));
+    renderRpcList();
+  }
+
+  msg.innerText = `✅ RPC mới đã được thêm vào ${chain}`;
+  msg.style.color = "green";
+  document.getElementById("rpcInput").value = "";
+});
+function renderRpcList() {
+  const container = document.getElementById("rpcListContainer");
+  const customRPC = JSON.parse(localStorage.getItem("customRPC") || "{}");
+  let html = "";
+
+  for (let chain in customRPC) {
+    html += `<div><strong>${chain}</strong><ul>`;
+    customRPC[chain].forEach((rpc, index) => {
+      html += `<li class="flex items-center justify-between">
+        <span>${rpc}</span>
+        <button class="text-red-600 ml-2" onclick="removeRpc('${chain}', ${index})">Xoá</button>
+      </li>`;
+    });
+    html += "</ul></div>";
+  }
+
+  container.innerHTML = html || "<p>Chưa có RPC nào được thêm.</p>";
+}
+window.removeRpc = function (chain, index) {
+  const customRPC = JSON.parse(localStorage.getItem("customRPC") || "{}");
+  if (!customRPC[chain]) return;
+
+  customRPC[chain].splice(index, 1);
+  if (customRPC[chain].length === 0) {
+    delete customRPC[chain];
+  }
+
+  localStorage.setItem("customRPC", JSON.stringify(customRPC));
+  renderRpcList();
+};
