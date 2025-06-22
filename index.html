@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Wallet Generator</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.8.1/dist/ethers.umd.min.js"></script>
+</head>
+<body>
+  <h2>Tạo ví Ethereum</h2>
+  <button onclick="generateWallet()">Tạo ví ngẫu nhiên</button>
+  <br><br>
+  <input type="file" id="targetFile" />
+  <br><br>
+  <div id="result"></div>
+
+  <script>
+    let targetAddresses = [];
+
+    document.getElementById("targetFile").addEventListener("change", function(event) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        targetAddresses = e.target.result.split(/\r?\n/).map(s => s.trim().toLowerCase());
+        alert("Tải file target thành công!");
+      };
+      reader.readAsText(event.target.files[0]);
+    });
+
+    async function generateWallet() {
+      const wallet = ethers.Wallet.createRandom();
+      const textContent = `Address: ${wallet.address}\nPrivate Key: ${wallet.privateKey}`;
+      const blob = new Blob([textContent], { type: "text/plain" });
+
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `wallet_${wallet.address.slice(2, 8)}.txt`;
+      link.textContent = "Tải wallet";
+
+      let result = document.getElementById("result");
+      result.innerHTML = `<p>Địa chỉ: ${wallet.address}</p>`;
+      result.appendChild(link);
+
+      if (targetAddresses.includes(wallet.address.toLowerCase())) {
+        const matchBlob = new Blob([textContent], { type: "text/plain" });
+        const matchLink = document.createElement("a");
+        matchLink.href = URL.createObjectURL(matchBlob);
+        matchLink.download = "match.txt";
+        matchLink.textContent = "🎯 Ví này trùng! Tải match.txt";
+        result.appendChild(document.createElement("br"));
+        result.appendChild(matchLink);
+        alert("🎉 Trùng ví target!");
+      }
+    }
+  </script>
+</body>
+</html>
