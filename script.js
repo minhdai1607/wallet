@@ -149,14 +149,22 @@ generateBtn.addEventListener("click", async () => {
     outputArea.innerHTML = `<p class='text-red-600'>Lỗi: ${err.message}</p>`;
   }
 });
-const walletListEl = document.getElementById("walletList");
 
+// === Tab logic ===
+window.showTab = function(id) {
+  document.querySelectorAll(".tab").forEach(tab => tab.style.display = "none");
+  document.getElementById(id).style.display = "block";
+  if (id === "manager") renderWalletList();
+  if (id === "balance") renderRpcList();
+};
+
+// === Wallet Management ===
+const walletListEl = document.getElementById("walletList");
 function renderWalletList() {
   if (!walletStore.length) {
     walletListEl.innerHTML = "<p>Không có ví nào được lưu.</p>";
     return;
   }
-
   walletListEl.innerHTML = walletStore.map((w, i) => `
     <div class="border p-2 rounded my-2">
       <p><strong>Address:</strong> ${w.address}</p>
@@ -165,23 +173,14 @@ function renderWalletList() {
     </div>
   `).join("");
 }
-
-function deleteWallet(index) {
+window.deleteWallet = function(index) {
   walletStore.splice(index, 1);
   localStorage.setItem("walletStore", JSON.stringify(walletStore));
   renderWalletList();
-}
-function showTab(id) {
-  document.querySelectorAll(".tab").forEach(tab => tab.style.display = "none");
-  document.getElementById(id).style.display = "block";
-  if (id === "balance") {
-    renderRpcList(); // cập nhật danh sách RPC mỗi lần mở tab
-  }
-  if (id === "manager") {
-    renderWalletList();
-  }
-}
-import { CHAINS } from './chains.js';
+};
+
+// === RPC + Balance Logic ===
+import { CHAINS, getMergedChains } from "./chains.js";
 
 const checkBtn = document.getElementById("checkBalanceBtn");
 const resultEl = document.getElementById("balanceResult");
@@ -189,45 +188,38 @@ const resultEl = document.getElementById("balanceResult");
 checkBtn.addEventListener("click", async () => {
   const workerCount = parseInt(document.getElementById("balanceWorker").value);
   if (!workerCount || workerCount <= 0) return alert("Vui lòng nhập số worker hợp lệ.");
-
   if (!walletStore.length) return alert("Không có ví nào để kiểm tra.");
 
   resultEl.innerHTML = "Đang kiểm tra số dư...";
-
   const allResults = [];
 
   const chainEntries = Object.entries(getMergedChains());
   for (const [chainName, rpcs] of chainEntries) {
-    const rpc = rpcs[0]; // lấy RPC đầu tiên
+    const rpc = rpcs[0];
     const chunkSize = Math.ceil(walletStore.length / workerCount);
     const promises = [];
 
     for (let i = 0; i < workerCount; i++) {
       const chunk = walletStore.slice(i * chunkSize, (i + 1) * chunkSize);
       const worker = new Worker("./workers/checkBalance.js");
-
       worker.postMessage({ wallets: chunk, rpc });
-
-      const p = new Promise((res) => {
-        worker.onmessage = (e) => {
+      const p = new Promise(res => {
+        worker.onmessage = e => {
           res(e.data);
           worker.terminate();
         };
       });
-
       promises.push(p);
     }
-
     const results = (await Promise.all(promises)).flat();
     allResults.push(...results);
   }
 
-  // Lọc ví có balance > 0
   walletStore = allResults;
   localStorage.setItem("walletStore", JSON.stringify(walletStore));
   renderWalletList();
 
-  if (walletStore.length === 0) {
+  if (!walletStore.length) {
     resultEl.innerHTML = "Không có ví nào có số dư > 0";
   } else {
     let html = `<p>✅ Tìm thấy ${walletStore.length} ví có balance > 0:</p><ul>`;
@@ -235,7 +227,6 @@ checkBtn.addEventListener("click", async () => {
       html += `<li>${w.address} — ${w.balance} ETH</li>`;
     });
     html += "</ul>";
-
     const content = walletStore.map(w => `${w.address} - ${w.privateKey}`).join("\n");
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -243,9 +234,8 @@ checkBtn.addEventListener("click", async () => {
     resultEl.innerHTML = html;
   }
 });
-import { getMergedChains } from "./chains.js";
 
-// Thêm RPC từ UI
+// === RPC UI ===
 document.getElementById("addRpcBtn").addEventListener("click", () => {
   const chain = document.getElementById("rpcChainSelect").value;
   const rpc = document.getElementById("rpcInput").value.trim();
@@ -269,6 +259,7 @@ document.getElementById("addRpcBtn").addEventListener("click", () => {
   msg.style.color = "green";
   document.getElementById("rpcInput").value = "";
 });
+
 function renderRpcList() {
   const container = document.getElementById("rpcListContainer");
   const customRPC = JSON.parse(localStorage.getItem("customRPC") || "{}");
@@ -284,21 +275,13 @@ function renderRpcList() {
     });
     html += "</ul></div>";
   }
-
   container.innerHTML = html || "<p>Chưa có RPC nào được thêm.</p>";
 }
-window.removeRpc = function (chain, index) {
+window.removeRpc = function(chain, index) {
   const customRPC = JSON.parse(localStorage.getItem("customRPC") || "{}");
   if (!customRPC[chain]) return;
-
   customRPC[chain].splice(index, 1);
-  if (customRPC[chain].length === 0) {
-    delete customRPC[chain];
-  }
-
+  if (customRPC[chain].length === 0) delete customRPC[chain];
   localStorage.setItem("customRPC", JSON.stringify(customRPC));
   renderRpcList();
 };
-window.showTab = showTab;
-window.deleteWallet = deleteWallet;
-
