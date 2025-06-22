@@ -299,3 +299,6 @@ window.removeRpc = function (chain, index) {
   localStorage.setItem("customRPC", JSON.stringify(customRPC));
   renderRpcList();
 };
+window.showTab = showTab;
+window.deleteWallet = deleteWallet;
+
