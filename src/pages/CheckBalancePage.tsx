@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Upload, Search, Download, Loader2, Wallet } from 'lucide-react'
+import { Upload, Search, Download, Loader2, Wallet, Edit, Plus, X, Save } from 'lucide-react'
 import { Wallet as WalletType, RpcConfig } from '../types/index'
 import { loadWalletsFromFile, checkWalletBalance, formatBalance, getChainSymbol } from '../utils/walletUtils'
-import { loadRpcConfigsFromStorage } from '../utils/storage'
+import { loadRpcConfigsFromStorage, saveRpcConfigsToStorage } from '../utils/storage'
 
 interface BalanceResult {
   wallet: WalletType
@@ -20,6 +20,11 @@ const CheckBalancePage = () => {
   const [selectedChains, setSelectedChains] = useState<string[]>([])
   const [workerCount, setWorkerCount] = useState(4)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  
+  // RPC Management states
+  const [showRpcManager, setShowRpcManager] = useState(false)
+  const [editingRpc, setEditingRpc] = useState<RpcConfig | null>(null)
+  const [newRpc, setNewRpc] = useState<Partial<RpcConfig>>({})
 
   // Default RPC configurations with premium endpoints
   const defaultRpcs: RpcConfig[] = [
@@ -187,6 +192,54 @@ const CheckBalancePage = () => {
 
   const walletsWithBalance = results.filter(result => result.hasBalance)
 
+  // RPC Management functions
+  const handleSaveRpcConfigs = () => {
+    saveRpcConfigsToStorage(rpcConfigs)
+    setShowRpcManager(false)
+    setEditingRpc(null)
+    setNewRpc({})
+  }
+
+  const handleAddRpc = () => {
+    if (newRpc.chain && newRpc.url && newRpc.name) {
+      const rpcConfig: RpcConfig = {
+        id: `custom-${Date.now()}`,
+        chain: newRpc.chain.toUpperCase(),
+        url: newRpc.url,
+        name: newRpc.name
+      }
+      setRpcConfigs(prev => [...prev, rpcConfig])
+      setNewRpc({})
+    }
+  }
+
+  const handleEditRpc = (rpc: RpcConfig) => {
+    setEditingRpc(rpc)
+  }
+
+  const handleSaveEditRpc = () => {
+    if (editingRpc) {
+      setRpcConfigs(prev => 
+        prev.map(rpc => 
+          rpc.id === editingRpc.id ? editingRpc : rpc
+        )
+      )
+      setEditingRpc(null)
+    }
+  }
+
+  const handleDeleteRpc = (id: string) => {
+    setRpcConfigs(prev => prev.filter(rpc => rpc.id !== id))
+    setSelectedChains(prev => prev.filter(chain => 
+      rpcConfigs.find(rpc => rpc.id === id)?.chain !== chain
+    ))
+  }
+
+  const handleResetToDefaults = () => {
+    setRpcConfigs(defaultRpcs)
+    setSelectedChains(defaultRpcs.map(config => config.chain))
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="card mb-6">
@@ -216,7 +269,17 @@ const CheckBalancePage = () => {
 
         {/* Blockchain Selection */}
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-4">Chọn blockchain để check:</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">Chọn blockchain để check:</h3>
+            <button
+              onClick={() => setShowRpcManager(!showRpcManager)}
+              className="btn-secondary flex items-center space-x-2"
+            >
+              <Edit size={16} />
+              <span>Quản lý RPC</span>
+            </button>
+          </div>
+          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {rpcConfigs.map((config) => (
               <label key={config.id} className="flex items-center space-x-2 cursor-pointer">
@@ -231,6 +294,152 @@ const CheckBalancePage = () => {
             ))}
           </div>
         </div>
+
+        {/* RPC Manager Modal */}
+        {showRpcManager && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-semibold">Quản lý RPC Endpoints</h3>
+                <button
+                  onClick={() => setShowRpcManager(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Add New RPC */}
+              <div className="mb-6 p-4 border border-gray-200 rounded-lg">
+                <h4 className="font-semibold mb-3">Thêm RPC mới:</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <input
+                    type="text"
+                    placeholder="Tên blockchain (VD: ETH)"
+                    value={newRpc.chain || ''}
+                    onChange={(e) => setNewRpc(prev => ({ ...prev, chain: e.target.value }))}
+                    className="input-field"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Tên hiển thị (VD: Ethereum)"
+                    value={newRpc.name || ''}
+                    onChange={(e) => setNewRpc(prev => ({ ...prev, name: e.target.value }))}
+                    className="input-field"
+                  />
+                  <input
+                    type="text"
+                    placeholder="RPC URL"
+                    value={newRpc.url || ''}
+                    onChange={(e) => setNewRpc(prev => ({ ...prev, url: e.target.value }))}
+                    className="input-field"
+                  />
+                </div>
+                <button
+                  onClick={handleAddRpc}
+                  disabled={!newRpc.chain || !newRpc.url || !newRpc.name}
+                  className="btn-primary mt-3 flex items-center space-x-2 disabled:opacity-50"
+                >
+                  <Plus size={16} />
+                  <span>Thêm RPC</span>
+                </button>
+              </div>
+
+              {/* RPC List */}
+              <div className="space-y-3">
+                <h4 className="font-semibold">Danh sách RPC hiện tại:</h4>
+                {rpcConfigs.map((rpc) => (
+                  <div key={rpc.id} className="border border-gray-200 rounded-lg p-3">
+                    {editingRpc?.id === rpc.id ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          value={editingRpc.chain}
+                          onChange={(e) => setEditingRpc(prev => prev ? { ...prev, chain: e.target.value.toUpperCase() } : null)}
+                          className="input-field"
+                        />
+                        <input
+                          type="text"
+                          value={editingRpc.name}
+                          onChange={(e) => setEditingRpc(prev => prev ? { ...prev, name: e.target.value } : null)}
+                          className="input-field"
+                        />
+                        <input
+                          type="text"
+                          value={editingRpc.url}
+                          onChange={(e) => setEditingRpc(prev => prev ? { ...prev, url: e.target.value } : null)}
+                          className="input-field"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
+                        <span className="font-medium">{rpc.chain}</span>
+                        <span className="text-gray-600">{rpc.name}</span>
+                        <span className="text-gray-500 text-sm truncate">{rpc.url}</span>
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => handleEditRpc(rpc)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRpc(rpc.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {editingRpc?.id === rpc.id && (
+                      <div className="flex space-x-2 mt-3">
+                        <button
+                          onClick={handleSaveEditRpc}
+                          className="btn-primary flex items-center space-x-2"
+                        >
+                          <Save size={16} />
+                          <span>Lưu</span>
+                        </button>
+                        <button
+                          onClick={() => setEditingRpc(null)}
+                          className="btn-secondary"
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-between mt-6">
+                <button
+                  onClick={handleResetToDefaults}
+                  className="btn-secondary"
+                >
+                  Khôi phục mặc định
+                </button>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowRpcManager(false)}
+                    className="btn-secondary"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    onClick={handleSaveRpcConfigs}
+                    className="btn-primary flex items-center space-x-2"
+                  >
+                    <Save size={16} />
+                    <span>Lưu cấu hình</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Worker Count */}
         <div className="mb-6">
