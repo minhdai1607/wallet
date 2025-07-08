@@ -21,8 +21,7 @@ const ManagementPage = () => {
   const [showFileViewer, setShowFileViewer] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterBy, setFilterBy] = useState<'all' | 'generated' | 'uploaded' | 'matched' | 'checked' | 'unchecked'>('all')
-  const [showCheckBalanceModal, setShowCheckBalanceModal] = useState(false)
-  const [fileToCheck, setFileToCheck] = useState<WalletFile | null>(null)
+
 
   useEffect(() => {
     loadWalletFiles()
@@ -131,11 +130,6 @@ const ManagementPage = () => {
     return new Date(dateString).toLocaleString('vi-VN')
   }
 
-  const handleCheckBalance = (file: WalletFile) => {
-    setFileToCheck(file)
-    setShowCheckBalanceModal(true)
-  }
-
   const handleNavigateToCheckBalance = (file: WalletFile) => {
     // Store file data in localStorage for CheckBalancePage to use
     localStorage.setItem('selectedFileForCheck', JSON.stringify({
@@ -144,19 +138,6 @@ const ManagementPage = () => {
     }))
     // Navigate to check balance page
     window.location.href = '/check-balance'
-  }
-
-  const updateFileBalanceStatus = (fileId: string, checked: boolean, results?: any[]) => {
-    setWalletFiles(prev => prev.map(file => 
-      file.id === fileId 
-        ? { 
-            ...file, 
-            balanceChecked: checked, 
-            balanceCheckedAt: checked ? new Date().toISOString() : undefined,
-            balanceResults: results
-          }
-        : file
-    ))
   }
 
   return (
