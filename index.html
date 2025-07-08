@@ -1,88 +1,14 @@
 
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Ethereum Wallet Generator</title>
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.10.0/dist/ethers.umd.min.js"></script>
-</head>
-<body>
-  <div class="container">
-    <h1>Ethereum Wallet Generator</h1>
-    <nav>
-      <button onclick="showTab('generator')">Tạo ví</button>
-      <button onclick="showTab('manager')">Quản lý ví</button>
-      <button onclick="showTab('balance')">Check Balance</button>
-    </nav>
-
-    <div id="generator" class="tab">
-      <form id="walletForm">
-        <div>
-          <label>Chọn phương pháp tạo ví:</label><br>
-          <label><input type="radio" name="method" value="random" checked> Random Range</label>
-          <label><input type="radio" name="method" value="privatekey"> Private Key</label>
-          <label><input type="radio" name="method" value="mnemonic"> Mnemonic</label>
-        </div>
-        <div id="inputArea" class="mt-4"></div>
-        <div class="mt-4">
-          <label>Số lượng ví cần tạo:</label>
-          <input type="number" id="walletCount" class="input" value="1000" />
-        </div>
-        <div class="mt-4">
-          <label>Số lượng worker:</label>
-          <input type="number" id="workerCount" class="input" value="4" />
-        </div>
-        <div class="mt-4">
-          <button type="button" id="generateBtn" class="btn">Tạo ví</button>
-        </div>
-      </form>
-      <div id="outputArea" class="mt-6"></div>
-    </div>
-
-    <div id="manager" class="tab" style="display: none;">
-      <h2>Quản lý ví</h2>
-      <div id="walletList"></div>
-    </div>
-
-    <div id="balance" class="tab" style="display: none;">
-    <h2>Kiểm tra số dư</h2>
-        <div class="mb-2">
-            <label for="balanceWorker">Số worker kiểm tra song song:</label>
-            <input type="number" id="balanceWorker" class="input" value="4" />
-        </div>
-        <div class="mb-2">
-            <button class="btn" id="checkBalanceBtn">Bắt đầu kiểm tra</button>
-        </div>
-        <div id="balanceResult"></div>
-    </div>
-    <hr class="my-4">
-<h3>Thêm RPC mới</h3>
-<div>
-  <label>Chọn Chain:</label>
-  <select id="rpcChainSelect" class="input">
-    <option value="ETH">ETH</option>
-    <option value="BNB">BNB</option>
-    <option value="POLYGON">POLYGON</option>
-    <option value="BASE">BASE</option>
-    <option value="OP">OP</option>
-    <option value="ARP">ARP</option>
-  </select>
-</div>
-    <div class="mt-2">
-    <label>RPC URL:</label>
-    <input id="rpcInput" type="text" class="input" placeholder="https://..." />
-    </div>
-    <div class="mt-2">
-    <button class="btn" id="addRpcBtn">Thêm RPC</button>
-    </div>
-    <div id="rpcMessage" class="mt-2 text-sm text-green-700"></div>
-
-  </div>
-  <hr class="my-4">
-<h3>RPC đã thêm</h3>
-<div id="rpcListContainer" class="text-sm"></div>
-<script type="module" src="script.js"></script>
-</body>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wallet Generator</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>
