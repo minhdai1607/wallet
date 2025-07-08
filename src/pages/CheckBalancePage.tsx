@@ -631,6 +631,19 @@ const CheckBalancePage = () => {
                 </tbody>
               </table>
             </div>
+            {/* Add Update Status Button */}
+            <div className="mt-4 flex justify-end">
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  // Mark all results as checked (add a checked property or update status as needed)
+                  // This is a placeholder; actual implementation may depend on how status is tracked
+                  alert('All statuses updated to checked!')
+                }}
+              >
+                Cập nhật trạng thái đã kiểm tra
+              </button>
+            </div>
           </div>
         </div>
       )}

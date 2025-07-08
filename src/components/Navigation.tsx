@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Key, FolderOpen, Settings, Coins } from 'lucide-react'
+import { Key, FolderOpen, Coins } from 'lucide-react'
 
 const Navigation = () => {
   const location = useLocation()
@@ -8,7 +8,6 @@ const Navigation = () => {
     { path: '/', label: 'Generate Private Key', icon: Key },
     { path: '/management', label: 'Management', icon: FolderOpen },
     { path: '/check-balance', label: 'Check Balance', icon: Coins },
-    { path: '/rpc', label: 'RPC Management', icon: Settings },
   ]
 
   return (

@@ -87,20 +87,25 @@ export const saveWalletsToFile = (wallets: Wallet[], filename?: string): void =>
 // Save file directly to source (simulate by creating a download with specific name)
 export const saveFileToSource = (wallets: Wallet[], isMatchResult: boolean = false): void => {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-  const filename = isMatchResult 
-    ? `expected_result_${timestamp}.txt`
-    : `wallet_${timestamp}.txt`
-  
-  const content = wallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
-  const blob = new Blob([content], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const baseFilename = isMatchResult 
+    ? `public/expected_result_${timestamp}`
+    : `public/wallet_${timestamp}`
+
+  const chunkSize = 1_000_000
+  for (let i = 0; i < wallets.length; i += chunkSize) {
+    const chunk = wallets.slice(i, i + chunkSize)
+    const filename = `${baseFilename}_part${Math.floor(i / chunkSize) + 1}.txt`
+    const content = chunk.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 }
 
 export const loadWalletsFromFile = (file: File): Promise<Wallet[]> => {
