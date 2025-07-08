@@ -132,39 +132,112 @@ export const loadWalletsFromFile = (file: File): Promise<Wallet[]> => {
   })
 }
 
-// Check balance for a specific wallet on a specific chain
+// Fallback RPC endpoints for each chain
+const fallbackEndpoints: { [key: string]: string[] } = {
+  ETH: [
+    'https://eth.llamarpc.com',
+    'https://mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24',
+    'https://rpc.ankr.com/eth/77d5b9fb64723e265ea8e77b93490a6df107ad251ec935d7f7fd44520866b865',
+    'https://rpc.ankr.com/eth',
+    'https://cloudflare-eth.com'
+  ],
+  BNB: [
+    'https://bsc-dataseed1.binance.org',
+    'https://bsc-dataseed2.binance.org',
+    'https://bsc-dataseed3.binance.org',
+    'https://rpc.ankr.com/bsc'
+  ],
+  POLYGON: [
+    'https://polygon-rpc.com',
+    'https://polygon-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24',
+    'https://rpc-mainnet.matic.network',
+    'https://rpc-mainnet.maticvigil.com',
+    'https://rpc.ankr.com/polygon'
+  ],
+  BASE: [
+    'https://mainnet.base.org',
+    'https://base-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24',
+    'https://base.blockpi.network/v1/rpc/public'
+  ],
+  OP: [
+    'https://mainnet.optimism.io',
+    'https://optimism-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24',
+    'https://optimism.blockpi.network/v1/rpc/public'
+  ],
+  ARB: [
+    'https://arb1.arbitrum.io/rpc',
+    'https://arbitrum-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24',
+    'https://arbitrum.blockpi.network/v1/rpc/public'
+  ],
+  AVAX: [
+    'https://api.avax.network/ext/bc/C/rpc',
+    'https://rpc.ankr.com/avalanche'
+  ],
+  FTM: [
+    'https://rpc.fantom.network',
+    'https://rpc.ftm.tools',
+    'https://rpcapi.fantom.network'
+  ]
+}
+
+// Check balance for a specific wallet on a specific chain with retry and fallback
 export const checkWalletBalance = async (
   walletAddress: string, 
   rpcUrl: string, 
   chain: string
 ): Promise<{ balance: string; symbol: string }> => {
-  try {
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method: 'eth_getBalance',
-        params: [walletAddress, 'latest'],
-        id: 1
-      })
-    })
+  const endpoints = [rpcUrl, ...(fallbackEndpoints[chain] || [])]
+  const maxRetries = 3
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+        
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_getBalance',
+            params: [walletAddress, 'latest'],
+            id: 1
+          }),
+          signal: controller.signal
+        })
 
-    if (response.ok) {
-      const data = await response.json()
-      if (data.result) {
-        const balance = data.result
-        const symbol = getChainSymbol(chain)
-        return { balance, symbol }
+        clearTimeout(timeoutId)
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.result) {
+            const balance = data.result
+            const symbol = getChainSymbol(chain)
+            return { balance, symbol }
+          }
+        }
+        
+        // If we get here, the request was successful but no result
+        break
+        
+      } catch (error) {
+        console.warn(`Attempt ${attempt + 1} failed for ${chain} at ${endpoint}:`, error)
+        continue
       }
     }
-    return { balance: '0', symbol: getChainSymbol(chain) }
-  } catch (error) {
-    console.error(`Error checking balance for ${chain}:`, error)
-    return { balance: '0', symbol: getChainSymbol(chain) }
+    
+    // Wait before retry (exponential backoff)
+    if (attempt < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+    }
   }
+  
+  // All attempts failed
+  console.error(`All attempts failed for ${chain}`)
+  return { balance: '0', symbol: getChainSymbol(chain) }
 }
 
 // Get chain symbol

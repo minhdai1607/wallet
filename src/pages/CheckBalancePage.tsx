@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Upload, Search, Download, Loader2, Wallet } from 'lucide-react'
 import { Wallet as WalletType, RpcConfig } from '../types/index'
-import { loadWalletsFromFile, checkWalletBalance, formatBalance } from '../utils/walletUtils'
+import { loadWalletsFromFile, checkWalletBalance, formatBalance, getChainSymbol } from '../utils/walletUtils'
 import { loadRpcConfigsFromStorage } from '../utils/storage'
 
 interface BalanceResult {
@@ -19,17 +19,18 @@ const CheckBalancePage = () => {
   const [results, setResults] = useState<BalanceResult[]>([])
   const [selectedChains, setSelectedChains] = useState<string[]>([])
   const [workerCount, setWorkerCount] = useState(4)
+  const [abortController, setAbortController] = useState<AbortController | null>(null)
 
-  // Default RPC configurations
+  // Default RPC configurations with premium endpoints
   const defaultRpcs: RpcConfig[] = [
-    { id: 'eth-1', chain: 'ETH', url: 'https://eth.llamarpc.com', name: 'Ethereum' },
+    { id: 'eth-1', chain: 'ETH', url: 'https://mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24', name: 'Ethereum (Infura)' },
     { id: 'bnb-1', chain: 'BNB', url: 'https://bsc-dataseed1.binance.org', name: 'BNB Smart Chain' },
-    { id: 'polygon-1', chain: 'POLYGON', url: 'https://polygon-rpc.com', name: 'Polygon' },
-    { id: 'base-1', chain: 'BASE', url: 'https://mainnet.base.org', name: 'Base' },
-    { id: 'op-1', chain: 'OP', url: 'https://mainnet.optimism.io', name: 'Optimism' },
-    { id: 'arb-1', chain: 'ARB', url: 'https://arb1.arbitrum.io/rpc', name: 'Arbitrum' },
+    { id: 'polygon-1', chain: 'POLYGON', url: 'https://polygon-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24', name: 'Polygon (Infura)' },
+    { id: 'base-1', chain: 'BASE', url: 'https://base-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24', name: 'Base (Infura)' },
+    { id: 'op-1', chain: 'OP', url: 'https://optimism-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24', name: 'Optimism (Infura)' },
+    { id: 'arb-1', chain: 'ARB', url: 'https://arbitrum-mainnet.infura.io/v3/d9f58b9dee474f0281bc9c87161aee24', name: 'Arbitrum (Infura)' },
     { id: 'avax-1', chain: 'AVAX', url: 'https://api.avax.network/ext/bc/C/rpc', name: 'Avalanche' },
-    { id: 'ftm-1', chain: 'FTM', url: 'https://rpc.ftm.tools', name: 'Fantom' }
+    { id: 'ftm-1', chain: 'FTM', url: 'https://rpc.fantom.network', name: 'Fantom' }
   ]
 
   useEffect(() => {
@@ -75,6 +76,10 @@ const CheckBalancePage = () => {
       return
     }
 
+    // Create abort controller for cancellation
+    const controller = new AbortController()
+    setAbortController(controller)
+
     setIsChecking(true)
     setProgress({ current: 0, total: wallets.length * selectedChains.length })
     setResults([])
@@ -84,18 +89,34 @@ const CheckBalancePage = () => {
 
     try {
       for (let i = 0; i < wallets.length; i++) {
+        // Check if operation was cancelled
+        if (controller.signal.aborted) {
+          console.log('Balance check cancelled by user')
+          break
+        }
+
         const wallet = wallets[i]
         const balances: { [chain: string]: { balance: string; symbol: string } } = {}
         let hasBalance = false
 
         for (const chain of selectedChains) {
+          // Check if operation was cancelled
+          if (controller.signal.aborted) {
+            break
+          }
+
           const rpcConfig = rpcConfigs.find(config => config.chain === chain)
           if (rpcConfig) {
-            const balanceResult = await checkBalance(wallet, rpcConfig.url, chain)
-            balances[chain] = balanceResult
-            
-            if (BigInt(balanceResult.balance) > 0) {
-              hasBalance = true
+            try {
+              const balanceResult = await checkBalance(wallet, rpcConfig.url, chain)
+              balances[chain] = balanceResult
+              
+              if (BigInt(balanceResult.balance) > 0) {
+                hasBalance = true
+              }
+            } catch (error) {
+              console.warn(`Failed to check balance for ${chain}:`, error)
+              balances[chain] = { balance: '0', symbol: getChainSymbol(chain) }
             }
 
             // Update progress
@@ -114,10 +135,21 @@ const CheckBalancePage = () => {
       }
 
     } catch (error) {
-      console.error('Balance check error:', error)
-      alert(`Lỗi: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      if (!controller.signal.aborted) {
+        console.error('Balance check error:', error)
+        alert(`Lỗi: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
     } finally {
       setIsChecking(false)
+      setAbortController(null)
+    }
+  }
+
+  const stopBalanceCheck = () => {
+    if (abortController) {
+      abortController.abort()
+      setIsChecking(false)
+      setAbortController(null)
     }
   }
 
@@ -217,18 +249,24 @@ const CheckBalancePage = () => {
 
         {/* Action Buttons */}
         <div className="flex space-x-4 mb-6">
-          <button
-            onClick={startBalanceCheck}
-            disabled={isChecking || wallets.length === 0 || selectedChains.length === 0}
-            className="btn-primary flex items-center space-x-2 disabled:opacity-50"
-          >
-            {isChecking ? (
-              <Loader2 className="animate-spin" size={16} />
-            ) : (
+          {!isChecking ? (
+            <button
+              onClick={startBalanceCheck}
+              disabled={wallets.length === 0 || selectedChains.length === 0}
+              className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+            >
               <Search size={16} />
-            )}
-            <span>{isChecking ? 'Đang check...' : 'Bắt đầu check balance'}</span>
-          </button>
+              <span>Bắt đầu check balance</span>
+            </button>
+          ) : (
+            <button
+              onClick={stopBalanceCheck}
+              className="btn-secondary flex items-center space-x-2"
+            >
+              <Loader2 className="animate-spin" size={16} />
+              <span>Dừng check balance</span>
+            </button>
+          )}
           
           {walletsWithBalance.length > 0 && (
             <button
