@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, Download, Trash2, X, FileText, Eye, Calendar, FileDown } from 'lucide-react'
+import { Upload, Download, Trash2, X, FileText, Eye, Calendar, FileDown, Search, CheckCircle, Clock } from 'lucide-react'
 import { Wallet } from '../types/index'
 import { loadWalletsFromStorage } from '../utils/storage'
 import { loadWalletsFromFile, saveWalletsToFile } from '../utils/walletUtils'
@@ -10,6 +10,9 @@ interface WalletFile {
   wallets: Wallet[]
   createdAt: string
   type: 'generated' | 'uploaded' | 'matched'
+  balanceChecked?: boolean
+  balanceCheckedAt?: string
+  balanceResults?: any[]
 }
 
 const ManagementPage = () => {
@@ -17,7 +20,9 @@ const ManagementPage = () => {
   const [selectedFile, setSelectedFile] = useState<WalletFile | null>(null)
   const [showFileViewer, setShowFileViewer] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterBy, setFilterBy] = useState<'all' | 'generated' | 'uploaded' | 'matched'>('all')
+  const [filterBy, setFilterBy] = useState<'all' | 'generated' | 'uploaded' | 'matched' | 'checked' | 'unchecked'>('all')
+  const [showCheckBalanceModal, setShowCheckBalanceModal] = useState(false)
+  const [fileToCheck, setFileToCheck] = useState<WalletFile | null>(null)
 
   useEffect(() => {
     loadWalletFiles()
@@ -81,18 +86,24 @@ const ManagementPage = () => {
   }
 
   const filteredFiles = walletFiles.filter(file => {
-    if (!searchTerm) return true
-    
     const searchLower = searchTerm.toLowerCase()
+    const matchesSearch = !searchTerm || file.name.toLowerCase().includes(searchLower)
+    
+    if (!matchesSearch) return false
+    
     switch (filterBy) {
       case 'generated':
-        return file.type === 'generated' && file.name.toLowerCase().includes(searchLower)
+        return file.type === 'generated'
       case 'uploaded':
-        return file.type === 'uploaded' && file.name.toLowerCase().includes(searchLower)
+        return file.type === 'uploaded'
       case 'matched':
-        return file.type === 'matched' && file.name.toLowerCase().includes(searchLower)
+        return file.type === 'matched'
+      case 'checked':
+        return file.balanceChecked === true
+      case 'unchecked':
+        return file.balanceChecked !== true
       default:
-        return file.name.toLowerCase().includes(searchLower)
+        return true
     }
   })
 
@@ -118,6 +129,34 @@ const ManagementPage = () => {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString('vi-VN')
+  }
+
+  const handleCheckBalance = (file: WalletFile) => {
+    setFileToCheck(file)
+    setShowCheckBalanceModal(true)
+  }
+
+  const handleNavigateToCheckBalance = (file: WalletFile) => {
+    // Store file data in localStorage for CheckBalancePage to use
+    localStorage.setItem('selectedFileForCheck', JSON.stringify({
+      name: file.name,
+      wallets: file.wallets
+    }))
+    // Navigate to check balance page
+    window.location.href = '/check-balance'
+  }
+
+  const updateFileBalanceStatus = (fileId: string, checked: boolean, results?: any[]) => {
+    setWalletFiles(prev => prev.map(file => 
+      file.id === fileId 
+        ? { 
+            ...file, 
+            balanceChecked: checked, 
+            balanceCheckedAt: checked ? new Date().toISOString() : undefined,
+            balanceResults: results
+          }
+        : file
+    ))
   }
 
   return (
@@ -166,6 +205,8 @@ const ManagementPage = () => {
               <option value="generated">Generated</option>
               <option value="uploaded">Uploaded</option>
               <option value="matched">Matched</option>
+              <option value="checked">Đã check balance</option>
+              <option value="unchecked">Chưa check balance</option>
             </select>
           </div>
           <div className="flex items-end">
@@ -213,10 +254,31 @@ const ManagementPage = () => {
                           <Calendar size={14} />
                           <span>{formatDate(file.createdAt)}</span>
                         </span>
+                        {file.balanceChecked ? (
+                          <span className="flex items-center space-x-1 text-green-600">
+                            <CheckCircle size={14} />
+                            <span>Đã check balance</span>
+                            {file.balanceCheckedAt && (
+                              <span className="text-xs">({formatDate(file.balanceCheckedAt)})</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="flex items-center space-x-1 text-orange-600">
+                            <Clock size={14} />
+                            <span>Chưa check balance</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleNavigateToCheckBalance(file)}
+                      className="btn-primary flex items-center space-x-2 text-sm"
+                    >
+                      <Search size={14} />
+                      <span>Check Balance</span>
+                    </button>
                     <button
                       onClick={() => handleViewFile(file)}
                       className="btn-secondary flex items-center space-x-2 text-sm"
@@ -226,7 +288,7 @@ const ManagementPage = () => {
                     </button>
                     <button
                       onClick={() => handleDownload(file)}
-                      className="btn-primary flex items-center space-x-2 text-sm"
+                      className="btn-secondary flex items-center space-x-2 text-sm"
                     >
                       <FileDown size={14} />
                       <span>Tải</span>
