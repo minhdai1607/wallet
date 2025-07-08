@@ -48,6 +48,21 @@ const CheckBalancePage = () => {
       setRpcConfigs(defaultRpcs)
       setSelectedChains(defaultRpcs.map(config => config.chain))
     }
+
+    // Check if there's a file selected from Management page
+    const selectedFileData = localStorage.getItem('selectedFileForCheck')
+    if (selectedFileData) {
+      try {
+        const fileData = JSON.parse(selectedFileData)
+        setWallets(fileData.wallets)
+        setSelectedFile(new File([], fileData.name)) // Create a dummy file object
+        setResults([])
+        // Clear the localStorage after loading
+        localStorage.removeItem('selectedFileForCheck')
+      } catch (error) {
+        console.error('Error loading selected file:', error)
+      }
+    }
   }, [])
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
