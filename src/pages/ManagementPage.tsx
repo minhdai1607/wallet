@@ -131,12 +131,7 @@ const ManagementPage = () => {
   }
 
   const handleNavigateToCheckBalance = (file: WalletFile) => {
-    // Store file data in localStorage for CheckBalancePage to use
-    localStorage.setItem('selectedFileForCheck', JSON.stringify({
-      name: file.name,
-      wallets: file.wallets
-    }))
-    // Navigate to check balance page
+    // Chuyển sang trang check balance, không lưu dữ liệu lớn vào localStorage nữa
     window.location.href = '/check-balance'
   }
 
