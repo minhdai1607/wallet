@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Play, Download, Loader2 } from 'lucide-react'
 import { Wallet, GenerationProgress } from '../types/index'
 import { 
@@ -33,11 +33,14 @@ const GeneratePage = () => {
   const [rangeMin, setRangeMin] = useState(0)
   const [rangeMax, setRangeMax] = useState(100000)
 
+  const stopRequested = useRef(false)
+
   const generateWallets = useCallback(async () => {
     setIsGenerating(true)
     setProgress({ current: 0, total: walletCount, estimatedTime: 0, isComplete: false })
     setGeneratedWallets([])
     setMatchedWallets([])
+    stopRequested.current = false
 
     const startTime = Date.now()
     const wallets: Wallet[] = []
@@ -51,6 +54,9 @@ const GeneratePage = () => {
       console.log(`Loaded ${loadedTargets.length} targets`)
 
       for (let i = 0; i < walletCount; i++) {
+        if (stopRequested.current) {
+          break
+        }
         let wallet: Wallet
 
         switch (method) {
@@ -125,6 +131,10 @@ const GeneratePage = () => {
       setIsGenerating(false)
     }
   }, [method, workerCount, walletCount, privateKeyInput, seedPhrase, rangeMin, rangeMax])
+
+  const handleStop = () => {
+    stopRequested.current = true
+  }
 
   const handleDownload = () => {
     if (generatedWallets.length > 0) {
@@ -310,7 +320,14 @@ const GeneratePage = () => {
             )}
             <span>{isGenerating ? 'Đang tạo...' : 'Bắt đầu'}</span>
           </button>
-          
+          {isGenerating && (
+            <button
+              onClick={handleStop}
+              className="btn-secondary flex items-center space-x-2"
+            >
+              <span>Dừng</span>
+            </button>
+          )}
           {generatedWallets.length > 0 && (
             <button
               onClick={handleDownload}
