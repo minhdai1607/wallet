@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, Search, Download, Loader2, Wallet, Edit, Plus, X, Save, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Upload, Search, Download, Loader2, Edit, Plus, X, Save, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Wallet as WalletType, RpcConfig } from '../types/index'
 import { loadWalletsFromFile, checkWalletBalance, formatBalance, getChainSymbol } from '../utils/walletUtils'
 import { loadRpcConfigsFromStorage, saveRpcConfigsToStorage } from '../utils/storage'
