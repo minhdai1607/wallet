@@ -88,23 +88,54 @@ export const saveWalletsToFile = (wallets: Wallet[], filename?: string): void =>
 export const saveFileToSource = (wallets: Wallet[], isMatchResult: boolean = false): void => {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
   const baseFilename = isMatchResult 
-    ? `public/expected_result_${timestamp}`
-    : `public/wallet_${timestamp}`
+    ? `expected_result_${timestamp}`
+    : `wallet_${timestamp}`
 
-  const chunkSize = 1_000_000
-  for (let i = 0; i < wallets.length; i += chunkSize) {
-    const chunk = wallets.slice(i, i + chunkSize)
-    const filename = `${baseFilename}_part${Math.floor(i / chunkSize) + 1}.txt`
-    const content = chunk.map(w => `${w.privateKey} - ${w.address}`).join('\n')
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+  // Save to localStorage for ManagementPage
+  const fileData = {
+    id: Date.now().toString(),
+    name: `${baseFilename}.txt`,
+    wallets: wallets,
+    createdAt: new Date().toISOString(),
+    type: isMatchResult ? 'matched' : 'generated'
+  }
+
+  // Get existing files from localStorage
+  const existingFiles = JSON.parse(localStorage.getItem('wallet_files') || '[]')
+  existingFiles.push(fileData)
+  localStorage.setItem('wallet_files', JSON.stringify(existingFiles))
+
+  // Also create download
+  const content = wallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+  const blob = new Blob([content], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${baseFilename}.txt`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+// Load generated files from localStorage
+export const loadGeneratedFiles = (): any[] => {
+  try {
+    return JSON.parse(localStorage.getItem('wallet_files') || '[]')
+  } catch (error) {
+    console.error('Error loading generated files:', error)
+    return []
+  }
+}
+
+// Remove generated file from localStorage
+export const removeGeneratedFile = (fileId: string): void => {
+  try {
+    const existingFiles = JSON.parse(localStorage.getItem('wallet_files') || '[]')
+    const updatedFiles = existingFiles.filter((file: any) => file.id !== fileId)
+    localStorage.setItem('wallet_files', JSON.stringify(updatedFiles))
+  } catch (error) {
+    console.error('Error removing generated file:', error)
   }
 }
 

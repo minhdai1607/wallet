@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Upload, Download, Trash2, X, FileText, Eye, Calendar, FileDown, Search, CheckCircle, Clock } from 'lucide-react'
 import { Wallet } from '../types/index'
 import { loadWalletsFromStorage } from '../utils/storage'
-import { loadWalletsFromFile, saveWalletsToFile } from '../utils/walletUtils'
+import { loadWalletsFromFile, saveWalletsToFile, loadGeneratedFiles, removeGeneratedFile } from '../utils/walletUtils'
 
 interface WalletFile {
   id: string
@@ -25,23 +25,57 @@ const ManagementPage = () => {
 
   useEffect(() => {
     loadWalletFiles()
-  }, [])
+    
+    // Listen for storage changes to refresh when new files are added
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'wallet_files') {
+        loadWalletFiles()
+      }
+    }
+    
+    window.addEventListener('storage', handleStorageChange)
+    
+    // Also check for changes every 2 seconds (for same-tab updates)
+    const interval = setInterval(() => {
+      const currentFiles = loadGeneratedFiles()
+      const currentCount = currentFiles.length
+      const storedCount = walletFiles.filter(f => f.id !== 'legacy-1').length
+      
+      if (currentCount !== storedCount) {
+        loadWalletFiles()
+      }
+    }, 2000)
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      clearInterval(interval)
+    }
+  }, [walletFiles.length])
 
   const loadWalletFiles = () => {
+    // Load generated files from localStorage
+    const generatedFiles = loadGeneratedFiles()
+    
     // Load from localStorage - simulate file management
     const storedWallets = loadWalletsFromStorage()
+    
+    const files: WalletFile[] = []
+    
+    // Add generated files
+    files.push(...generatedFiles)
+    
+    // Add stored wallets if they exist
     if (storedWallets.length > 0) {
-      const files: WalletFile[] = [
-        {
-          id: '1',
-          name: 'wallet_generated.txt',
-          wallets: storedWallets,
-          createdAt: new Date().toISOString(),
-          type: 'generated'
-        }
-      ]
-      setWalletFiles(files)
+      files.push({
+        id: 'legacy-1',
+        name: 'wallet_generated.txt',
+        wallets: storedWallets,
+        createdAt: new Date().toISOString(),
+        type: 'generated'
+      })
     }
+    
+    setWalletFiles(files)
   }
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,6 +110,11 @@ const ManagementPage = () => {
 
   const handleDeleteFile = (fileId: string) => {
     if (confirm('Bạn có chắc chắn muốn xóa file này?')) {
+      // Remove from localStorage if it's a generated file
+      if (fileId !== 'legacy-1') {
+        removeGeneratedFile(fileId)
+      }
+      
       setWalletFiles(prev => prev.filter(file => file.id !== fileId))
       if (selectedFile?.id === fileId) {
         setSelectedFile(null)
@@ -131,7 +170,16 @@ const ManagementPage = () => {
   }
 
   const handleNavigateToCheckBalance = (file: WalletFile) => {
-    // Chuyển sang trang check balance, không lưu dữ liệu lớn vào localStorage nữa
+    // Lưu dữ liệu file được chọn vào localStorage để CheckBalancePage có thể đọc
+    const fileData = {
+      name: file.name,
+      wallets: file.wallets,
+      type: file.type,
+      createdAt: file.createdAt
+    }
+    localStorage.setItem('selectedFileForCheck', JSON.stringify(fileData))
+    
+    // Chuyển sang trang check balance
     window.location.href = '/check-balance'
   }
 
@@ -310,15 +358,15 @@ const ManagementPage = () => {
                 </button>
               </div>
               <div className="space-y-2">
-                {selectedFile.wallets.slice(0, 50).map((wallet, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm font-mono">
+                {selectedFile.wallets.slice(-100).map((wallet, index) => (
+                  <div key={selectedFile.wallets.length - 100 + index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm font-mono">
                     <span className="text-gray-600">{wallet.privateKey}</span>
                     <span className="text-gray-800">{wallet.address}</span>
                   </div>
                 ))}
-                {selectedFile.wallets.length > 50 && (
+                {selectedFile.wallets.length > 100 && (
                   <p className="text-center text-gray-500 text-sm py-2">
-                    ... và {selectedFile.wallets.length - 50} wallet khác
+                    ... và {selectedFile.wallets.length - 100} wallet khác (chỉ hiển thị 100 cuối cùng)
                   </p>
                 )}
               </div>

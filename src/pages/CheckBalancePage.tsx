@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Upload, Search, Download, Loader2, Wallet, Edit, Plus, X, Save } from 'lucide-react'
+import { Upload, Search, Download, Loader2, Wallet, Edit, Plus, X, Save, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Wallet as WalletType, RpcConfig } from '../types/index'
 import { loadWalletsFromFile, checkWalletBalance, formatBalance, getChainSymbol } from '../utils/walletUtils'
 import { loadRpcConfigsFromStorage, saveRpcConfigsToStorage } from '../utils/storage'
@@ -8,6 +8,7 @@ interface BalanceResult {
   wallet: WalletType
   balances: { [chain: string]: { balance: string; symbol: string; usdValue?: number } }
   hasBalance: boolean
+  checkedAt: string // Add timestamp for sorting
 }
 
 const CheckBalancePage = () => {
@@ -20,6 +21,10 @@ const CheckBalancePage = () => {
   const [selectedChains, setSelectedChains] = useState<string[]>([])
   const [workerCount, setWorkerCount] = useState(4)
   const [abortController, setAbortController] = useState<AbortController | null>(null)
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage] = useState(20)
   
   // RPC Management states
   const [showRpcManager, setShowRpcManager] = useState(false)
@@ -57,6 +62,7 @@ const CheckBalancePage = () => {
         setWallets(fileData.wallets)
         setSelectedFile(new File([], fileData.name)) // Create a dummy file object
         setResults([])
+        setCurrentPage(1) // Reset pagination
         // Clear the localStorage after loading
         localStorage.removeItem('selectedFileForCheck')
       } catch (error) {
@@ -103,6 +109,7 @@ const CheckBalancePage = () => {
     setIsChecking(true)
     setProgress({ current: 0, total: wallets.length * selectedChains.length })
     setResults([])
+    setCurrentPage(1) // Reset pagination when starting new check
 
     const newResults: BalanceResult[] = []
     const batchSize = Math.ceil((wallets.length * selectedChains.length) / workerCount)
@@ -150,7 +157,7 @@ const CheckBalancePage = () => {
           }
         }
 
-        newResults.push({ wallet, balances, hasBalance })
+        newResults.push({ wallet, balances, hasBalance, checkedAt: new Date().toISOString() })
         setResults([...newResults])
       }
 
@@ -205,7 +212,27 @@ const CheckBalancePage = () => {
     URL.revokeObjectURL(url)
   }
 
-  const walletsWithBalance = results.filter(result => result.hasBalance)
+  // Sort results by newest first (checkedAt timestamp)
+  const sortedResults = [...results].sort((a, b) => 
+    new Date(b.checkedAt).getTime() - new Date(a.checkedAt).getTime()
+  )
+  
+  const walletsWithBalance = sortedResults.filter(result => result.hasBalance)
+
+  // Pagination logic
+  const totalPages = Math.ceil(sortedResults.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentResults = sortedResults.slice(startIndex, endIndex)
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const handleFirstPage = () => setCurrentPage(1)
+  const handleLastPage = () => setCurrentPage(totalPages)
+  const handlePrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1))
+  const handleNextPage = () => setCurrentPage(prev => Math.min(totalPages, prev + 1))
 
   // RPC Management functions
   const handleSaveRpcConfigs = () => {
@@ -528,7 +555,7 @@ const CheckBalancePage = () => {
             <h3 className="text-lg font-semibold mb-4 text-blue-800">Tóm tắt</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <p className="text-blue-700">📊 Tổng số wallet: {results.length}</p>
+                <p className="text-blue-700">📊 Tổng số wallet: {sortedResults.length}</p>
               </div>
               <div>
                 <p className="text-green-700">💰 Wallet có balance: {walletsWithBalance.length}</p>
@@ -539,45 +566,63 @@ const CheckBalancePage = () => {
             </div>
           </div>
 
-          {/* Wallets with Balance */}
+          {/* Wallets with Balance - Enhanced Table */}
           {walletsWithBalance.length > 0 && (
             <div className="card border-green-200 bg-green-50">
               <h3 className="text-lg font-semibold mb-4 text-green-800">
                 💰 Wallet có Balance ({walletsWithBalance.length})
               </h3>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {walletsWithBalance.map((result, index) => (
-                  <div key={index} className="bg-white rounded-lg p-4 border border-green-200">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center space-x-2">
-                        <Wallet size={16} className="text-green-600" />
-                        <span className="font-mono text-sm text-gray-700">
-                          {result.wallet.address}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-500">
-                        #{index + 1}
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {Object.entries(result.balances)
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-green-200">
+                      <th className="text-left py-2 px-2 text-green-800">#</th>
+                      <th className="text-left py-2 px-2 text-green-800">Address</th>
+                      <th className="text-left py-2 px-2 text-green-800">Private Key</th>
+                      {selectedChains.map(chain => (
+                        <th key={chain} className="text-left py-2 px-2 text-green-800">{chain}</th>
+                      ))}
+                      <th className="text-left py-2 px-2 text-green-800">Tổng Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {walletsWithBalance.map((result, index) => {
+                      const totalBalance = Object.entries(result.balances)
                         .filter(([_, balance]) => BigInt(balance.balance) > 0)
-                        .map(([chain, balance]) => (
-                          <div key={chain} className="flex justify-between text-sm">
-                            <span className="text-gray-600">{chain}:</span>
-                            <span className="font-semibold text-green-700">
-                              {formatBalance(balance.balance)} {balance.symbol}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                    <div className="mt-2 pt-2 border-t border-gray-200">
-                      <p className="text-xs text-gray-500 font-mono">
-                        PK: {result.wallet.privateKey}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                        .reduce((total, [_, balance]) => total + BigInt(balance.balance), BigInt(0))
+                      
+                      return (
+                        <tr key={index} className="border-b border-green-100 bg-white hover:bg-green-50">
+                          <td className="py-2 px-2 text-green-700 font-semibold">{index + 1}</td>
+                          <td className="py-2 px-2 font-mono text-xs text-green-800">
+                            {result.wallet.address}
+                          </td>
+                          <td className="py-2 px-2 font-mono text-xs text-gray-600">
+                            {result.wallet.privateKey}
+                          </td>
+                          {selectedChains.map(chain => {
+                            const balance = result.balances[chain]
+                            const hasBalance = balance && BigInt(balance.balance) > 0
+                            return (
+                              <td key={chain} className="py-2 px-2">
+                                {balance ? (
+                                  <span className={hasBalance ? 'text-green-700 font-semibold' : 'text-gray-500'}>
+                                    {formatBalance(balance.balance)} {balance.symbol}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </td>
+                            )
+                          })}
+                          <td className="py-2 px-2 text-green-700 font-bold">
+                            {formatBalance(totalBalance.toString())}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -598,9 +643,9 @@ const CheckBalancePage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {results.map((result, index) => (
-                    <tr key={index} className="border-b border-gray-100">
-                      <td className="py-2 px-2 text-gray-600">{index + 1}</td>
+                  {currentResults.map((result, index) => (
+                    <tr key={startIndex + index} className={`border-b border-gray-100 ${result.hasBalance ? 'bg-green-50' : ''}`}>
+                      <td className="py-2 px-2 text-gray-600">{startIndex + index + 1}</td>
                       <td className="py-2 px-2 font-mono text-xs">
                         {result.wallet.address.slice(0, 8)}...{result.wallet.address.slice(-6)}
                       </td>
@@ -631,6 +676,76 @@ const CheckBalancePage = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Hiển thị {startIndex + 1}-{Math.min(endIndex, sortedResults.length)} trong tổng số {sortedResults.length} kết quả
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={handleFirstPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Đầu
+                  </button>
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  
+                  {/* Page Numbers */}
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum
+                      if (totalPages <= 5) {
+                        pageNum = i + 1
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i
+                      } else {
+                        pageNum = currentPage - 2 + i
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`px-3 py-1 text-sm border rounded ${
+                            currentPage === pageNum
+                              ? 'bg-primary-600 text-white border-primary-600'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                  <button
+                    onClick={handleLastPage}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Cuối
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Add Update Status Button */}
             <div className="mt-4 flex justify-end">
               <button

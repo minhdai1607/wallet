@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { Play, Download, Loader2 } from 'lucide-react'
+import { Play, Download, Loader2, AlertTriangle } from 'lucide-react'
 import { Wallet, GenerationProgress } from '../types/index'
 import { 
   generateRandomWallet, 
@@ -16,6 +16,14 @@ import { saveWalletsToStorage } from '../utils/storage'
 
 type GenerationMethod = 'shuffle' | 'seed' | 'range'
 
+// Maximum limits for wallet generation - REMOVED
+// const MAX_WALLETS = {
+//   SHUFFLE: 1000000, // 1 million for shuffle method
+//   SEED: 1000000,    // 1 million for seed method  
+//   RANGE: 1000000,   // 1 million for range method
+//   TOTAL: 10000000   // 10 million total across all methods
+// }
+
 const GeneratePage = () => {
   const [method, setMethod] = useState<GenerationMethod>('shuffle')
   const [workerCount, setWorkerCount] = useState(2)
@@ -25,6 +33,7 @@ const GeneratePage = () => {
   const [generatedWallets, setGeneratedWallets] = useState<Wallet[]>([])
   const [matchedWallets, setMatchedWallets] = useState<Wallet[]>([])
   const [targets, setTargets] = useState<string[]>([])
+  const [error, setError] = useState<string>('')
 
   // Method-specific states
   const [privateKeyInput, setPrivateKeyInput] = useState('')
@@ -35,7 +44,64 @@ const GeneratePage = () => {
 
   const stopRequested = useRef(false)
 
+  // Calculate estimated total wallets that can be generated
+  const getEstimatedTotalWallets = () => {
+    switch (method) {
+      case 'shuffle':
+        return privateKeyInput.trim() ? 'Vô hạn (dựa trên private key)' : '0 (cần nhập private key)'
+      case 'seed':
+        return seedPhrase.trim() ? 'Vô hạn (dựa trên seed phrase)' : 'Vô hạn (tự động tạo)'
+      case 'range':
+        const range = rangeMax - rangeMin + 1
+        return range > 0 ? range.toLocaleString() : '0 (khoảng không hợp lệ)'
+      default:
+        return 'Vô hạn'
+    }
+  }
+
+  // Validate wallet count input - only check for invalid input
+  const validateWalletCount = (count: number): string => {
+    if (count <= 0) {
+      return 'Số lượng wallet phải lớn hơn 0'
+    }
+    
+    if (!Number.isInteger(count)) {
+      return 'Số lượng wallet phải là số nguyên'
+    }
+    
+    if (count > Number.MAX_SAFE_INTEGER) {
+      return 'Số lượng wallet quá lớn'
+    }
+    
+    return ''
+  }
+
+  const handleWalletCountChange = (value: number) => {
+    setWalletCount(value)
+    const validationError = validateWalletCount(value)
+    setError(validationError)
+  }
+
   const generateWallets = useCallback(async () => {
+    // Validate before starting
+    const validationError = validateWalletCount(walletCount)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    // Additional validation for specific methods
+    if (method === 'shuffle' && !privateKeyInput.trim()) {
+      setError('Vui lòng nhập private key để xáo trộn')
+      return
+    }
+
+    if (method === 'range' && rangeMin >= rangeMax) {
+      setError('Giá trị tối thiểu phải nhỏ hơn giá trị tối đa')
+      return
+    }
+
+    setError('') // Clear any previous errors
     setIsGenerating(true)
     setProgress({ current: 0, total: walletCount, estimatedTime: 0, isComplete: false })
     setGeneratedWallets([])
@@ -126,7 +192,7 @@ const GeneratePage = () => {
 
     } catch (error) {
       console.error('Generation error:', error)
-      alert(`Lỗi: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setError(error instanceof Error ? error.message : 'Unknown error')
     } finally {
       setIsGenerating(false)
     }
@@ -299,10 +365,18 @@ const GeneratePage = () => {
             <input
               type="number"
               value={walletCount}
-              onChange={(e) => setWalletCount(Number(e.target.value))}
+              onChange={(e) => handleWalletCountChange(Number(e.target.value))}
               min={1}
               className="input-field"
             />
+            {error && (
+              <p className="text-sm text-red-600 mt-1">
+                <AlertTriangle className="inline-block mr-1" size={14} /> {error}
+              </p>
+            )}
+            <p className="text-sm text-gray-500 mt-1">
+              Ước tính tổng số wallet có thể tạo: {getEstimatedTotalWallets()}
+            </p>
           </div>
         </div>
 
@@ -310,7 +384,7 @@ const GeneratePage = () => {
         <div className="flex space-x-4">
           <button
             onClick={generateWallets}
-            disabled={isGenerating}
+            disabled={isGenerating || !!error}
             className="btn-primary flex items-center space-x-2 disabled:opacity-50"
           >
             {isGenerating ? (
@@ -338,6 +412,17 @@ const GeneratePage = () => {
             </button>
           )}
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="text-red-600" size={20} />
+              <span className="text-red-800 font-medium">Lỗi:</span>
+            </div>
+            <p className="text-red-700 mt-1">{error}</p>
+          </div>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -387,15 +472,15 @@ const GeneratePage = () => {
             <h3 className="text-lg font-semibold mb-4">Tất cả Wallet đã tạo ({generatedWallets.length})</h3>
             <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
               <div className="text-sm font-mono space-y-1">
-                {generatedWallets.slice(0, 10).map((wallet, index) => (
-                  <div key={index} className="flex justify-between">
+                {generatedWallets.slice(-100).map((wallet, index) => (
+                  <div key={generatedWallets.length - 100 + index} className="flex justify-between">
                     <span className="text-gray-600">{wallet.privateKey}</span>
                     <span className="text-gray-800">{wallet.address}</span>
                   </div>
                 ))}
-                {generatedWallets.length > 10 && (
+                {generatedWallets.length > 100 && (
                   <p className="text-gray-500 text-center mt-2">
-                    ... và {generatedWallets.length - 10} private key khác
+                    ... và {generatedWallets.length - 100} private key khác (chỉ hiển thị 100 cuối cùng)
                   </p>
                 )}
               </div>
