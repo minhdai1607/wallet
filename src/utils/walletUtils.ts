@@ -35,9 +35,47 @@ export const generateWalletFromSeed = (seedPhrase: string, index: number = 0): W
   }
 }
 
-export const generateWalletFromRange = (min: number, max: number): Wallet => {
-  const randomValue = Math.floor(Math.random() * (max - min + 1)) + min
-  const privateKey = `0x${randomValue.toString(16).padStart(64, '0')}`
+// Convert hex string to BigInt for comparison
+const hexToBigInt = (hex: string): bigint => {
+  return BigInt('0x' + hex.replace('0x', ''))
+}
+
+// Convert BigInt to hex string
+const bigIntToHex = (value: bigint): string => {
+  return '0x' + value.toString(16).padStart(64, '0')
+}
+
+export const generateWalletFromRange = (minHex: string, maxHex: string): Wallet => {
+  // Remove 0x prefix if present
+  const min = minHex.replace('0x', '').toLowerCase()
+  const max = maxHex.replace('0x', '').toLowerCase()
+  
+  // Validate hex format
+  const hexRegex = /^[0-9a-f]+$/
+  if (!hexRegex.test(min) || !hexRegex.test(max)) {
+    throw new Error('Range values must be valid hex strings (0-9, a-f)')
+  }
+  
+  // Pad to 64 characters (32 bytes)
+  const minPadded = min.padEnd(64, '0')
+  const maxPadded = max.padEnd(64, 'f')
+  
+  // Convert to BigInt for comparison
+  const minBigInt = hexToBigInt(minPadded)
+  const maxBigInt = hexToBigInt(maxPadded)
+  
+  if (minBigInt >= maxBigInt) {
+    throw new Error('Minimum value must be less than maximum value')
+  }
+  
+  // Generate random BigInt within range
+  const range = maxBigInt - minBigInt
+  const randomOffset = BigInt(Math.floor(Math.random() * Number(range)))
+  const randomBigInt = minBigInt + (randomOffset % range)
+  
+  // Convert back to hex
+  const privateKey = bigIntToHex(randomBigInt)
+  
   return generateWalletFromPrivateKey(privateKey)
 }
 
@@ -72,6 +110,12 @@ export const checkWalletMatch = (wallet: Wallet, targets: string[]): boolean => 
 
 // Save wallets to file and download
 export const saveWalletsToFile = (wallets: Wallet[], filename?: string): void => {
+  // For large files, use chunked download
+  if (wallets.length > 100000) {
+    downloadLargeFile(wallets, filename)
+    return
+  }
+  
   const content = wallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
@@ -84,6 +128,36 @@ export const saveWalletsToFile = (wallets: Wallet[], filename?: string): void =>
   URL.revokeObjectURL(url)
 }
 
+// Download large files in chunks
+const downloadLargeFile = (wallets: Wallet[], filename?: string): void => {
+  const chunkSize = 50000 // Process 50k wallets at a time
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+  const baseFilename = filename || `wallet_${timestamp}.txt`
+  
+  const totalChunks = Math.ceil(wallets.length / chunkSize)
+  
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * chunkSize
+    const end = Math.min(start + chunkSize, wallets.length)
+    const chunk = wallets.slice(start, end)
+    
+    const chunkFilename = totalChunks > 1 
+      ? `${baseFilename.replace('.txt', '')}_part${i + 1}_of_${totalChunks}.txt`
+      : baseFilename
+    
+    const content = chunk.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = chunkFilename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+}
+
 // Save file directly to source (simulate by creating a download with specific name)
 export const saveFileToSource = (wallets: Wallet[], isMatchResult: boolean = false): void => {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
@@ -91,31 +165,37 @@ export const saveFileToSource = (wallets: Wallet[], isMatchResult: boolean = fal
     ? `expected_result_${timestamp}`
     : `wallet_${timestamp}`
 
-  // Save to localStorage for ManagementPage
-  const fileData = {
-    id: Date.now().toString(),
-    name: `${baseFilename}.txt`,
-    wallets: wallets,
-    createdAt: new Date().toISOString(),
-    type: isMatchResult ? 'matched' : 'generated'
+  // Save to localStorage for ManagementPage (only for smaller files to avoid localStorage limits)
+  if (wallets.length <= 10000) {
+    const fileData = {
+      id: Date.now().toString(),
+      name: `${baseFilename}.txt`,
+      wallets: wallets,
+      createdAt: new Date().toISOString(),
+      type: isMatchResult ? 'matched' : 'generated'
+    }
+
+    // Get existing files from localStorage
+    const existingFiles = JSON.parse(localStorage.getItem('wallet_files') || '[]')
+    existingFiles.push(fileData)
+    localStorage.setItem('wallet_files', JSON.stringify(existingFiles))
   }
 
-  // Get existing files from localStorage
-  const existingFiles = JSON.parse(localStorage.getItem('wallet_files') || '[]')
-  existingFiles.push(fileData)
-  localStorage.setItem('wallet_files', JSON.stringify(existingFiles))
-
-  // Also create download
-  const content = wallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
-  const blob = new Blob([content], { type: 'text/plain' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${baseFilename}.txt`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  // Create download - use chunked download for large files
+  if (wallets.length > 100000) {
+    downloadLargeFile(wallets, `${baseFilename}.txt`)
+  } else {
+    const content = wallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${baseFilename}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 }
 
 // Load generated files from localStorage
