@@ -3,6 +3,8 @@ import Navigation from './components/Navigation'
 import GeneratePage from './pages/GeneratePage'
 import ManagementPage from './pages/ManagementPage'
 import CheckBalancePage from './pages/CheckBalancePage'
+import ComparePage from './pages/ComparePage'
+import CheckUsagePage from './pages/CheckUsagePage'
 
 function App() {
   return (
@@ -14,6 +16,8 @@ function App() {
             <Route path="/" element={<GeneratePage />} />
             <Route path="/management" element={<ManagementPage />} />
             <Route path="/check-balance" element={<CheckBalancePage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/check-usage" element={<CheckUsagePage />} />
           </Routes>
         </main>
       </div>
