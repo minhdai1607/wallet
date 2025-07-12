@@ -20,4 +20,16 @@ export interface GenerationProgress {
   total: number
   estimatedTime: number
   isComplete: boolean
+}
+
+export interface WalletUsageStatus {
+  address: string
+  hasBalance: boolean
+  hasTransactions: boolean
+  nonce: number
+  balance: string
+  symbol: string
+  isUsed: boolean
+  lastActivity?: string
+  error?: string
 } 

@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
-import { Play, Download, Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Play, Download, Loader2, AlertTriangle, ChevronDown, ChevronUp, Settings, Pause } from 'lucide-react'
 import { Wallet, GenerationProgress } from '../types/index'
 import { 
   generateRandomWallet, 
@@ -15,6 +15,22 @@ import {
 import { saveWalletsToStorage } from '../utils/storage'
 
 type GenerationMethod = 'shuffle' | 'seed' | 'range'
+
+// Thread configuration interface
+interface ThreadConfig {
+  id: number
+  isRunning: boolean
+  isCompleted: boolean
+  isPaused: boolean
+  progress: number // 0-100
+  currentCount: number
+  totalCount: number
+  startTime: number | null
+  endTime: number | null
+  wallets: Wallet[]
+  matchedWallets: Wallet[]
+  error: string | null
+}
 
 // Predefined private keys for selection
 const PREDEFINED_PRIVATE_KEYS = [
@@ -59,6 +75,16 @@ const GeneratePage = () => {
   const [targets, setTargets] = useState<string[]>([])
   const [error, setError] = useState<string>('')
 
+  // Multi-thread configuration states
+  const [useMultiThread, setUseMultiThread] = useState(false)
+  const [threadCount, setThreadCount] = useState(5)
+  const [coresPerThread, setCoresPerThread] = useState(4)
+  const [walletsPerThread, setWalletsPerThread] = useState(100000)
+  const [threads, setThreads] = useState<ThreadConfig[]>([])
+  const [isMultiThreadRunning, setIsMultiThreadRunning] = useState(false)
+  const [currentThreadIndex, setCurrentThreadIndex] = useState(0)
+  const [showThreadConfig, setShowThreadConfig] = useState(false)
+
   // Method-specific states
   const [privateKeyInput, setPrivateKeyInput] = useState('')
   const [seedPhrase, setSeedPhrase] = useState('')
@@ -72,6 +98,36 @@ const GeneratePage = () => {
   const [useCustomInput, setUseCustomInput] = useState(true)
 
   const stopRequested = useRef(false)
+  const multiThreadStopRequested = useRef(false)
+
+  // Initialize threads
+  const initializeThreads = useCallback(() => {
+    const newThreads: ThreadConfig[] = []
+    for (let i = 0; i < threadCount; i++) {
+      newThreads.push({
+        id: i + 1,
+        isRunning: false,
+        isCompleted: false,
+        isPaused: false,
+        progress: 0,
+        currentCount: 0,
+        totalCount: walletsPerThread,
+        startTime: null,
+        endTime: null,
+        wallets: [],
+        matchedWallets: [],
+        error: null
+      })
+    }
+    setThreads(newThreads)
+  }, [threadCount, walletsPerThread])
+
+  // Initialize threads when component mounts or config changes
+  useEffect(() => {
+    if (useMultiThread) {
+      initializeThreads()
+    }
+  }, [useMultiThread, initializeThreads])
 
   // Calculate estimated total wallets that can be generated
   const getEstimatedTotalWallets = () => {
@@ -336,6 +392,270 @@ const GeneratePage = () => {
     stopRequested.current = true
   }
 
+  // Multi-thread generation functions
+  const startMultiThreadGeneration = useCallback(async () => {
+    // Validate before starting
+    const validationError = validateWalletCount(walletsPerThread)
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    // Additional validation for specific methods
+    if (method === 'shuffle') {
+      const activePrivateKey = getActivePrivateKey()
+      if (!activePrivateKey) {
+        setError('Vui lòng nhập private key hoặc chọn từ danh sách có sẵn')
+        return
+      }
+    }
+
+    if (method === 'range') {
+      const hexRegex = /^[0-9a-fA-F]+$/
+      if (!hexRegex.test(rangeMin.replace('0x', '')) || !hexRegex.test(rangeMax.replace('0x', ''))) {
+        setError('Range values must be valid hex strings (0-9, a-f)')
+        return
+      }
+      
+      const minBigInt = BigInt('0x' + rangeMin.replace('0x', ''))
+      const maxBigInt = BigInt('0x' + rangeMax.replace('0x', ''))
+      if (minBigInt >= maxBigInt) {
+        setError('Giá trị tối thiểu phải nhỏ hơn giá trị tối đa')
+        return
+      }
+    }
+
+    setError('')
+    setIsMultiThreadRunning(true)
+    setCurrentThreadIndex(0)
+    multiThreadStopRequested.current = false
+
+    // Initialize threads
+    initializeThreads()
+
+    // Load targets first
+    const loadedTargets = await loadTargets()
+    setTargets(loadedTargets)
+
+    // Start sequential thread execution
+    await runThreadsSequentially(loadedTargets)
+  }, [method, walletsPerThread, privateKeyInput, seedPhrase, rangeMin, rangeMax, selectedPredefinedKey, useCustomInput, initializeThreads])
+
+  const runThreadsSequentially = async (loadedTargets: string[]) => {
+    for (let i = 0; i < threadCount; i++) {
+      if (multiThreadStopRequested.current) {
+        break
+      }
+
+      setCurrentThreadIndex(i)
+      await runSingleThread(i, loadedTargets)
+      
+      // Auto-download thread result
+      if (threads[i]?.wallets.length > 0) {
+        await downloadThreadResult(i + 1)
+      }
+    }
+
+    setIsMultiThreadRunning(false)
+  }
+
+  const runSingleThread = async (threadIndex: number, loadedTargets: string[]) => {
+    const thread = threads[threadIndex]
+    if (!thread) return
+
+    // Update thread status
+    setThreads(prev => prev.map((t, idx) => 
+      idx === threadIndex 
+        ? { ...t, isRunning: true, startTime: Date.now(), error: null }
+        : t
+    ))
+
+    const wallets: Wallet[] = []
+    const matched: Wallet[] = []
+    // const startTime = Date.now()
+
+    try {
+      for (let i = 0; i < walletsPerThread; i++) {
+        if (multiThreadStopRequested.current) {
+          // Mark as paused
+          setThreads(prev => prev.map((t, idx) => 
+            idx === threadIndex 
+              ? { ...t, isRunning: false, isPaused: true, endTime: Date.now() }
+              : t
+          ))
+          return
+        }
+
+        let wallet: Wallet
+
+        switch (method) {
+          case 'shuffle':
+            const activePrivateKey = getActivePrivateKey()
+            if (!activePrivateKey) {
+              throw new Error('Vui lòng nhập private key hoặc chọn từ danh sách có sẵn')
+            }
+            const shuffledKey = shufflePrivateKey(activePrivateKey)
+            wallet = generateWalletFromPrivateKey(shuffledKey)
+            break
+
+          case 'seed':
+            if (seedPhrase.trim()) {
+              wallet = generateWalletFromSeed(seedPhrase.trim(), i)
+            } else {
+              wallet = generateRandomWallet()
+            }
+            break
+
+          case 'range':
+            wallet = generateWalletFromRange(rangeMin, rangeMax)
+            break
+
+          default:
+            wallet = generateRandomWallet()
+        }
+
+        wallets.push(wallet)
+
+        // Check if wallet matches any target
+        if (checkWalletMatch(wallet, loadedTargets)) {
+          matched.push(wallet)
+        }
+
+        // Update thread progress
+        const current = i + 1
+        const progress = (current / walletsPerThread) * 100
+        
+        setThreads(prev => prev.map((t, idx) => 
+          idx === threadIndex 
+            ? { 
+                ...t, 
+                currentCount: current,
+                progress,
+                wallets: [...wallets],
+                matchedWallets: [...matched]
+              }
+            : t
+        ))
+
+        // Simulate processing delay
+        if (i % 1000 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 10))
+        }
+      }
+
+      // Mark thread as completed
+      setThreads(prev => prev.map((t, idx) => 
+        idx === threadIndex 
+          ? { 
+              ...t, 
+              isRunning: false, 
+              isCompleted: true, 
+              endTime: Date.now(),
+              wallets: [...wallets],
+              matchedWallets: [...matched]
+            }
+          : t
+      ))
+
+    } catch (error) {
+      console.error(`Thread ${threadIndex + 1} error:`, error)
+      setThreads(prev => prev.map((t, idx) => 
+        idx === threadIndex 
+          ? { 
+              ...t, 
+              isRunning: false, 
+              error: error instanceof Error ? error.message : 'Unknown error',
+              endTime: Date.now()
+            }
+          : t
+      ))
+    }
+  }
+
+  const stopMultiThreadGeneration = () => {
+    multiThreadStopRequested.current = true
+    setIsMultiThreadRunning(false)
+  }
+
+  const downloadThreadResult = async (threadId: number) => {
+    const thread = threads.find(t => t.id === threadId)
+    if (!thread || thread.wallets.length === 0) return
+
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+    const filename = `wallet_thread_${threadId}_${timestamp}.txt`
+    
+    // Download all wallets
+    const content = thread.wallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+    const blob = new Blob([content], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+
+    // Download matched wallets if any
+    if (thread.matchedWallets.length > 0) {
+      const matchedFilename = `expected_result_thread_${threadId}_${timestamp}.txt`
+      const matchedContent = thread.matchedWallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+      const matchedBlob = new Blob([matchedContent], { type: 'text/plain' })
+      const matchedUrl = URL.createObjectURL(matchedBlob)
+      const matchedA = document.createElement('a')
+      matchedA.href = matchedUrl
+      matchedA.download = matchedFilename
+      document.body.appendChild(matchedA)
+      matchedA.click()
+      document.body.removeChild(matchedA)
+      URL.revokeObjectURL(matchedUrl)
+    }
+  }
+
+  const downloadAllThreadResults = async () => {
+    const completedThreads = threads.filter(t => t.isCompleted && t.wallets.length > 0)
+    if (completedThreads.length === 0) return
+
+    // Download each thread result
+    for (const thread of completedThreads) {
+      await downloadThreadResult(thread.id)
+    }
+
+    // Also download combined result
+    const allWallets = completedThreads.flatMap(t => t.wallets)
+    const allMatchedWallets = completedThreads.flatMap(t => t.matchedWallets)
+    
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+    
+    // Download combined all wallets
+    const combinedFilename = `wallet_all_threads_${timestamp}.txt`
+    const combinedContent = allWallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+    const combinedBlob = new Blob([combinedContent], { type: 'text/plain' })
+    const combinedUrl = URL.createObjectURL(combinedBlob)
+    const combinedA = document.createElement('a')
+    combinedA.href = combinedUrl
+    combinedA.download = combinedFilename
+    document.body.appendChild(combinedA)
+    combinedA.click()
+    document.body.removeChild(combinedA)
+    URL.revokeObjectURL(combinedUrl)
+
+    // Download combined matched wallets
+    if (allMatchedWallets.length > 0) {
+      const combinedMatchedFilename = `expected_result_all_threads_${timestamp}.txt`
+      const combinedMatchedContent = allMatchedWallets.map(w => `${w.privateKey} - ${w.address}`).join('\n')
+      const combinedMatchedBlob = new Blob([combinedMatchedContent], { type: 'text/plain' })
+      const combinedMatchedUrl = URL.createObjectURL(combinedMatchedBlob)
+      const combinedMatchedA = document.createElement('a')
+      combinedMatchedA.href = combinedMatchedUrl
+      combinedMatchedA.download = combinedMatchedFilename
+      document.body.appendChild(combinedMatchedA)
+      combinedMatchedA.click()
+      document.body.removeChild(combinedMatchedA)
+      URL.revokeObjectURL(combinedMatchedUrl)
+    }
+  }
+
   const formatTime = (ms: number): string => {
     const seconds = Math.floor(ms / 1000)
     const minutes = Math.floor(seconds / 60)
@@ -391,6 +711,104 @@ const GeneratePage = () => {
               <p className="text-sm text-gray-600">Generate từ khoảng hex private key</p>
             </button>
           </div>
+        </div>
+
+        {/* Multi-Thread Configuration */}
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-blue-800">⚡ Cấu hình Multi-Thread</h2>
+            <button
+              onClick={() => setShowThreadConfig(!showThreadConfig)}
+              className="btn-secondary flex items-center space-x-2"
+            >
+              <Settings size={16} />
+              <span>{showThreadConfig ? 'Ẩn cấu hình' : 'Hiện cấu hình'}</span>
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-4 mb-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={useMultiThread}
+                onChange={(e) => {
+                  setUseMultiThread(e.target.checked)
+                  if (e.target.checked) {
+                    initializeThreads()
+                  }
+                }}
+                className="rounded border-gray-300"
+              />
+              <span className="font-medium">Sử dụng Multi-Thread (Khuyến nghị cho số lượng lớn)</span>
+            </label>
+          </div>
+
+          {showThreadConfig && useMultiThread && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-white rounded-lg border border-blue-200">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Số Thread:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={threadCount}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 5
+                    setThreadCount(Math.min(Math.max(value, 1), 10))
+                  }}
+                  className="input-field"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mặc định: 5 threads</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Core/Thread:
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="8"
+                  value={coresPerThread}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 4
+                    setCoresPerThread(Math.min(Math.max(value, 1), 8))
+                  }}
+                  className="input-field"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mặc định: 4 cores</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Wallet/Thread:
+                </label>
+                <input
+                  type="number"
+                  min="1000"
+                  max="1000000"
+                  value={walletsPerThread}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 100000
+                    setWalletsPerThread(Math.min(Math.max(value, 1000), 1000000))
+                  }}
+                  className="input-field"
+                />
+                <p className="text-xs text-gray-500 mt-1">Mặc định: 100,000 wallets</p>
+              </div>
+            </div>
+          )}
+
+          {useMultiThread && (
+            <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+              <p className="text-sm text-blue-800">
+                💡 Tổng cộng sẽ sinh: <strong>{(threadCount * walletsPerThread).toLocaleString()}</strong> wallets 
+                ({threadCount} threads × {walletsPerThread.toLocaleString()} wallets/thread)
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Method-specific inputs */}
@@ -648,34 +1066,71 @@ const GeneratePage = () => {
 
         {/* Action buttons */}
         <div className="flex space-x-4">
-          <button
-            onClick={generateWallets}
-            disabled={isGenerating}
-            className="btn-primary flex items-center space-x-2 disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <Loader2 className="animate-spin" size={16} />
-            ) : (
-              <Play size={16} />
-            )}
-            <span>{isGenerating ? 'Đang tạo...' : 'Bắt đầu'}</span>
-          </button>
-          {isGenerating && (
-            <button
-              onClick={handleStop}
-              className="btn-secondary flex items-center space-x-2"
-            >
-              <span>Dừng</span>
-            </button>
-          )}
-          {generatedWallets.length > 0 && (
-            <button
-              onClick={handleDownload}
-              className="btn-secondary flex items-center space-x-2"
-            >
-              <Download size={16} />
-              <span>Tải xuống</span>
-            </button>
+          {!useMultiThread ? (
+            <>
+              <button
+                onClick={generateWallets}
+                disabled={isGenerating}
+                className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+              >
+                {isGenerating ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  <Play size={16} />
+                )}
+                <span>{isGenerating ? 'Đang tạo...' : 'Bắt đầu'}</span>
+              </button>
+              {isGenerating && (
+                <button
+                  onClick={handleStop}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <span>Dừng</span>
+                </button>
+              )}
+              {generatedWallets.length > 0 && (
+                <button
+                  onClick={handleDownload}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <Download size={16} />
+                  <span>Tải xuống</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={startMultiThreadGeneration}
+                disabled={isMultiThreadRunning}
+                className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+              >
+                {isMultiThreadRunning ? (
+                  <Loader2 className="animate-spin" size={16} />
+                ) : (
+                  <Play size={16} />
+                )}
+                <span>{isMultiThreadRunning ? 'Đang chạy...' : 'Start All Threads'}</span>
+              </button>
+              {isMultiThreadRunning && (
+                <button
+                  onClick={stopMultiThreadGeneration}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <Pause size={16} />
+                  <span>Dừng tất cả</span>
+                </button>
+              )}
+              {threads.some(t => t.isCompleted) && (
+                <button
+                  onClick={downloadAllThreadResults}
+                  className="btn-secondary flex items-center space-x-2"
+                >
+                  <Download size={16} />
+                  <span>Tải tất cả</span>
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -691,8 +1146,8 @@ const GeneratePage = () => {
         )}
       </div>
 
-      {/* Progress bar */}
-      {progress && (
+      {/* Progress bars */}
+      {!useMultiThread && progress && (
         <div className="card mb-6">
           <h3 className="text-lg font-semibold mb-4">Tiến trình</h3>
           <div className="mb-4">
@@ -717,14 +1172,135 @@ const GeneratePage = () => {
               <p className="text-sm text-green-600 font-medium">
                 Hoàn thành! Đã tạo {progress.total.toLocaleString()} private key.
               </p>
-                              {matchedWallets.length > 0 && (
-                  <p className="text-sm text-orange-600 font-medium">
-                    🎯 Tìm thấy {matchedWallets.length.toLocaleString()} wallet trùng khớp với targets!
-                  </p>
-                )}
+              {matchedWallets.length > 0 && (
+                <p className="text-sm text-orange-600 font-medium">
+                  🎯 Tìm thấy {matchedWallets.length.toLocaleString()} wallet trùng khớp với targets!
+                </p>
+              )}
               <p className="text-sm text-gray-600">
                 Đã tải xuống: wallet_datetime.txt và {matchedWallets.length > 0 ? 'expected_result_datetime.txt' : ''}
               </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Multi-Thread Progress Bars */}
+      {useMultiThread && threads.length > 0 && (
+        <div className="card mb-6">
+          <h3 className="text-lg font-semibold mb-4">Tiến trình Multi-Thread</h3>
+          <div className="space-y-4">
+            {threads.map((thread) => (
+              <div key={thread.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-medium">Thread {thread.id}</h4>
+                    {thread.isRunning && (
+                      <div className="flex items-center space-x-1 text-blue-600">
+                        <Loader2 className="animate-spin" size={14} />
+                        <span className="text-sm">Đang chạy...</span>
+                      </div>
+                    )}
+                    {thread.isCompleted && (
+                      <div className="flex items-center space-x-1 text-green-600">
+                        <span className="text-sm">✅ Hoàn thành</span>
+                      </div>
+                    )}
+                    {thread.isPaused && (
+                      <div className="flex items-center space-x-1 text-orange-600">
+                        <span className="text-sm">⏸️ Tạm dừng</span>
+                      </div>
+                    )}
+                    {thread.error && (
+                      <div className="flex items-center space-x-1 text-red-600">
+                        <AlertTriangle size={14} />
+                        <span className="text-sm">Lỗi</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-gray-600">
+                      {thread.currentCount.toLocaleString()} / {thread.totalCount.toLocaleString()}
+                    </span>
+                    <span className="text-sm font-medium">
+                      {Math.round(thread.progress)}%
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-2">
+                  <div
+                    className={`h-3 rounded-full transition-all duration-300 ${
+                      thread.isCompleted ? 'bg-green-500' :
+                      thread.isRunning ? 'bg-blue-500' :
+                      thread.isPaused ? 'bg-orange-500' :
+                      thread.error ? 'bg-red-500' : 'bg-gray-400'
+                    }`}
+                    style={{ width: `${thread.progress}%` }}
+                  />
+                </div>
+                
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>
+                    {thread.startTime && (
+                      <>
+                        Bắt đầu: {new Date(thread.startTime).toLocaleTimeString()}
+                        {thread.endTime && (
+                          <> | Kết thúc: {new Date(thread.endTime).toLocaleTimeString()}</>
+                        )}
+                      </>
+                    )}
+                  </span>
+                  <span>
+                    {thread.wallets.length > 0 && (
+                      <>
+                        {thread.wallets.length.toLocaleString()} wallets
+                        {thread.matchedWallets.length > 0 && (
+                          <> | {thread.matchedWallets.length.toLocaleString()} matches</>
+                        )}
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                {/* Thread-specific actions */}
+                {thread.isCompleted && thread.wallets.length > 0 && (
+                  <div className="mt-2">
+                    <button
+                      onClick={() => downloadThreadResult(thread.id)}
+                      className="btn-secondary text-sm flex items-center space-x-1"
+                    >
+                      <Download size={14} />
+                      <span>Tải Thread {thread.id}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          {/* Overall progress */}
+          {isMultiThreadRunning && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex justify-between text-sm mb-2">
+                <span>Tiến trình tổng thể:</span>
+                <span>
+                  {threads.filter(t => t.isCompleted).length} / {threads.length} threads hoàn thành
+                  {currentThreadIndex > 0 && (
+                    <span className="ml-2 text-blue-600">
+                      (Đang chạy Thread {currentThreadIndex + 1})
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ 
+                    width: `${(threads.filter(t => t.isCompleted).length / threads.length) * 100}%` 
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>

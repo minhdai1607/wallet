@@ -383,4 +383,199 @@ export const formatBalance = (balance: string, decimals: number = 18): string =>
   } catch (error) {
     return '0.000000'
   }
+}
+
+// Interface for wallet usage status
+export interface WalletUsageStatus {
+  address: string
+  hasBalance: boolean
+  hasTransactions: boolean
+  nonce: number
+  balance: string
+  symbol: string
+  isUsed: boolean
+  lastActivity?: string
+  error?: string
+}
+
+// Check if wallet has been used (has balance, transactions, or nonce > 0)
+export const checkWalletUsage = async (
+  walletAddress: string,
+  rpcUrl: string,
+  chain: string
+): Promise<WalletUsageStatus> => {
+  try {
+    // Check balance first
+    const balanceResult = await checkWalletBalance(walletAddress, rpcUrl, chain)
+    const hasBalance = BigInt(balanceResult.balance) > BigInt(0)
+    
+    // Check nonce (transaction count)
+    const nonce = await getWalletNonce(walletAddress, rpcUrl, chain)
+    const hasTransactions = nonce > 0
+    
+    // Determine if wallet is used
+    const isUsed = hasBalance || hasTransactions
+    
+    return {
+      address: walletAddress,
+      hasBalance,
+      hasTransactions,
+      nonce,
+      balance: balanceResult.balance,
+      symbol: balanceResult.symbol,
+      isUsed,
+      lastActivity: hasTransactions ? 'Has transaction history' : undefined
+    }
+  } catch (error) {
+    return {
+      address: walletAddress,
+      hasBalance: false,
+      hasTransactions: false,
+      nonce: 0,
+      balance: '0',
+      symbol: getChainSymbol(chain),
+      isUsed: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  }
+}
+
+// Get wallet nonce (transaction count)
+export const getWalletNonce = async (
+  walletAddress: string,
+  rpcUrl: string,
+  chain: string
+): Promise<number> => {
+  const endpoints = [rpcUrl, ...(fallbackEndpoints[chain] || [])]
+  const maxRetries = 3
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000)
+        
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_getTransactionCount',
+            params: [walletAddress, 'latest'],
+            id: 1
+          }),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (response.ok) {
+          const data = await response.json()
+          if (data.result) {
+            return parseInt(data.result, 16)
+          }
+        }
+        
+        break
+        
+      } catch (error) {
+        console.warn(`Nonce check attempt ${attempt + 1} failed for ${chain} at ${endpoint}:`, error)
+        continue
+      }
+    }
+    
+    if (attempt < maxRetries - 1) {
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+    }
+  }
+  
+  return 0
+}
+
+// Check multiple wallets usage status
+export const checkMultipleWalletsUsage = async (
+  wallets: Wallet[],
+  rpcUrl: string,
+  chain: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<WalletUsageStatus[]> => {
+  const results: WalletUsageStatus[] = []
+  
+  for (let i = 0; i < wallets.length; i++) {
+    const wallet = wallets[i]
+    const status = await checkWalletUsage(wallet.address, rpcUrl, chain)
+    results.push(status)
+    
+    if (onProgress) {
+      onProgress(i + 1, wallets.length)
+    }
+    
+    // Add delay to avoid rate limiting
+    if (i < wallets.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+  }
+  
+  return results
+}
+
+// Filter wallets by usage status
+export const filterWalletsByUsage = (
+  wallets: Wallet[],
+  usageStatuses: WalletUsageStatus[],
+  filterType: 'used' | 'unused' | 'with_balance' | 'with_transactions'
+): Wallet[] => {
+  const filteredWallets: Wallet[] = []
+  
+  for (let i = 0; i < wallets.length; i++) {
+    const wallet = wallets[i]
+    const status = usageStatuses[i]
+    
+    if (!status) continue
+    
+    let shouldInclude = false
+    
+    switch (filterType) {
+      case 'used':
+        shouldInclude = status.isUsed
+        break
+      case 'unused':
+        shouldInclude = !status.isUsed
+        break
+      case 'with_balance':
+        shouldInclude = status.hasBalance
+        break
+      case 'with_transactions':
+        shouldInclude = status.hasTransactions
+        break
+    }
+    
+    if (shouldInclude) {
+      filteredWallets.push(wallet)
+    }
+  }
+  
+  return filteredWallets
+}
+
+// Get usage statistics
+export const getUsageStatistics = (usageStatuses: WalletUsageStatus[]) => {
+  const total = usageStatuses.length
+  const used = usageStatuses.filter(s => s.isUsed).length
+  const unused = total - used
+  const withBalance = usageStatuses.filter(s => s.hasBalance).length
+  const withTransactions = usageStatuses.filter(s => s.hasTransactions).length
+  
+  return {
+    total,
+    used,
+    unused,
+    withBalance,
+    withTransactions,
+    usedPercentage: total > 0 ? (used / total) * 100 : 0,
+    withBalancePercentage: total > 0 ? (withBalance / total) * 100 : 0,
+    withTransactionsPercentage: total > 0 ? (withTransactions / total) * 100 : 0
+  }
 } 
