@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Upload, Search, Download, Copy, AlertTriangle, CheckCircle, X, RefreshCw } from 'lucide-react'
+import { Upload, Search, Download, Copy, AlertTriangle, CheckCircle, X, RefreshCw, Settings } from 'lucide-react'
 import { Wallet } from '../types/index'
 import { loadWalletsFromFile, getWalletNonce } from '../utils/walletUtils'
 
@@ -33,6 +33,9 @@ const CheckUsagePage = () => {
   const [results, setResults] = useState<WalletWithNonce[]>([])
   const [progress, setProgress] = useState({ current: 0, total: 0 })
   const [error, setError] = useState<string>('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [workerCount, setWorkerCount] = useState(20)
+  const [batchSize, setBatchSize] = useState(100)
 
   // Handle multiple file uploads
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, fileIndex: number) => {
@@ -62,7 +65,7 @@ const CheckUsagePage = () => {
     setError('')
   }
 
-  // Only check nonce, optimize for speed (batch, parallel)
+  // Optimized nonce checking with multiple workers and larger batches
   const startChecking = async () => {
     const allWallets: WalletWithNonce[] = []
     files.forEach(f => {
@@ -76,16 +79,31 @@ const CheckUsagePage = () => {
     setIsChecking(true)
     setProgress({ current: 0, total: allWallets.length })
     setResults([])
+    
     const chain = AVAILABLE_CHAINS.find(c => c.id === selectedChain)
     const rpcUrl = customRpcUrl || chain?.rpc || AVAILABLE_CHAINS[0].rpc
 
-    // Batch nonce checks (parallel, 10 at a time)
-    const batchSize = 10
-    let checked: WalletWithNonce[] = []
-    for (let i = 0; i < allWallets.length; i += batchSize) {
-      const batch = allWallets.slice(i, i + batchSize)
-      const batchResults = await Promise.all(
-        batch.map(async (wallet) => {
+    try {
+      // Split wallets into worker batches
+      const walletsPerWorker = Math.ceil(allWallets.length / workerCount)
+      const workerBatches: WalletWithNonce[][] = []
+      
+      for (let i = 0; i < workerCount; i++) {
+        const start = i * walletsPerWorker
+        const end = Math.min(start + walletsPerWorker, allWallets.length)
+        if (start < allWallets.length) {
+          workerBatches.push(allWallets.slice(start, end))
+        }
+      }
+
+      // Process each worker batch in parallel
+      const workerPromises = workerBatches.map(async (workerBatch) => {
+        const results: WalletWithNonce[] = []
+        
+        // Process worker batch in smaller batches for progress updates
+      for (let i = 0; i < workerBatch.length; i += batchSize) {
+        const batch = workerBatch.slice(i, i + batchSize)
+        const batchPromises = batch.map(async (wallet) => {
           try {
             const nonce = await getWalletNonce(wallet.address, rpcUrl, selectedChain)
             return { ...wallet, nonce }
@@ -93,14 +111,33 @@ const CheckUsagePage = () => {
             return { ...wallet, nonce: 0 }
           }
         })
-      )
-      checked = checked.concat(batchResults)
-      setProgress({ current: Math.min(i + batchSize, allWallets.length), total: allWallets.length })
+        
+        const batchResults = await Promise.all(batchPromises)
+        results.push(...batchResults)
+        
+        // Update progress
+        setProgress(prev => ({
+          current: Math.min(prev.current + batch.length, allWallets.length),
+          total: allWallets.length
+        }))
+      }
+        
+        return results
+      })
+
+      // Wait for all workers to complete
+      const allResults = await Promise.all(workerPromises)
+      const checked = allResults.flat()
+      
+      // Only keep wallets with nonce > 0
+      const usedWallets = checked.filter(w => w.nonce > 0)
+      setResults(usedWallets)
+      
+    } catch (error) {
+      setError(`Lỗi khi kiểm tra: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsChecking(false)
     }
-    // Only keep wallets with nonce > 0
-    const usedWallets = checked.filter(w => w.nonce > 0)
-    setResults(usedWallets)
-    setIsChecking(false)
   }
 
   const downloadResults = () => {
@@ -125,12 +162,15 @@ const CheckUsagePage = () => {
     navigator.clipboard.writeText(content)
   }
 
+  const totalWallets = files.reduce((sum, f) => sum + f.wallets.length, 0)
+
   return (
     <div className="max-w-7xl mx-auto">
       <div className="card mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">🔍 Check Wallet Nonce (Đã sử dụng)</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">🔍 Check Wallet Nonce (Đã sử dụng) - TỐI ƯU TỐC ĐỘ</h1>
         <p className="text-gray-600 mb-6">
-          Tải lên 1-3 file wallet để kiểm tra các ví đã từng sử dụng (nonce {'>'} 0) trên blockchain. Chỉ kiểm tra nonce để tối ưu tốc độ.
+          Tải lên 1-3 file wallet để kiểm tra các ví đã từng sử dụng (nonce {'>'} 0) trên blockchain. 
+          Tối ưu tốc độ với {workerCount} workers, batch size {batchSize}.
         </p>
 
         {/* File Upload Section */}
@@ -204,6 +244,58 @@ const CheckUsagePage = () => {
           </div>
         </div>
 
+        {/* Performance Settings */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="btn-secondary flex items-center space-x-2"
+          >
+            <Settings size={16} />
+            <span>Cài đặt hiệu năng</span>
+          </button>
+          
+          {showAdvanced && (
+            <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Số Worker (càng nhiều càng nhanh):
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={workerCount}
+                    onChange={(e) => setWorkerCount(Math.min(Math.max(parseInt(e.target.value) || 20, 1), 50))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Mặc định: 20 workers</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Batch Size (càng lớn càng nhanh):
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="500"
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(Math.min(Math.max(parseInt(e.target.value) || 100, 10), 500))}
+                    className="input-field"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Mặc định: 100 wallets/batch</p>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  💡 Tổng cộng: {totalWallets.toLocaleString()} wallets | 
+                  Ước tính thời gian: {totalWallets > 0 ? Math.ceil(totalWallets / (workerCount * batchSize) * 0.5) : 0} giây
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Action Buttons */}
         <div className="flex space-x-4 mb-6">
           <button
@@ -258,7 +350,8 @@ const CheckUsagePage = () => {
               />
             </div>
             <p className="text-sm text-gray-600 mt-2">
-              Đang kiểm tra trên {AVAILABLE_CHAINS.find(c => c.id === selectedChain)?.name}
+              Đang kiểm tra trên {AVAILABLE_CHAINS.find(c => c.id === selectedChain)?.name} | 
+              {workerCount} workers | {batchSize} wallets/batch
             </p>
           </div>
         )}
