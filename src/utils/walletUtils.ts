@@ -91,12 +91,28 @@ export const shufflePrivateKey = (privateKey: string): string => {
 // Load targets from targets.txt
 export const loadTargets = async (): Promise<string[]> => {
   try {
+    console.log('Loading targets.txt...')
     const response = await fetch('/targets.txt')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
     const text = await response.text()
-    return text.split('\n')
+    console.log(`Loaded targets.txt: ${text.length} characters`)
+    
+    const lines = text.split('\n')
+    console.log(`Total lines: ${lines.length}`)
+    
+    const addresses = lines
       .map(line => line.trim())
       .filter(line => line && line.startsWith('0x'))
       .map(address => address.toLowerCase())
+    
+    console.log(`Valid addresses found: ${addresses.length}`)
+    if (addresses.length > 0) {
+      console.log('Sample addresses:', addresses.slice(0, 5))
+    }
+    
+    return addresses
   } catch (error) {
     console.error('Error loading targets.txt:', error)
     return []
@@ -105,7 +121,15 @@ export const loadTargets = async (): Promise<string[]> => {
 
 // Check if wallet address matches any target
 export const checkWalletMatch = (wallet: Wallet, targets: string[]): boolean => {
-  return targets.includes(wallet.address.toLowerCase())
+  const walletAddress = wallet.address.toLowerCase()
+  const isMatch = targets.includes(walletAddress)
+  
+  // Log matches for debugging (but limit to avoid spam)
+  if (isMatch) {
+    console.log(`🎯 MATCH FOUND! Address: ${wallet.address}, Private Key: ${wallet.privateKey}`)
+  }
+  
+  return isMatch
 }
 
 // Save wallets to file and download
