@@ -18,34 +18,34 @@ type GenerationMethod = 'shuffle' | 'seed' | 'range'
 
 // Predefined private keys for selection
 const PREDEFINED_PRIVATE_KEYS = [
-  '5808743c21cc1d53b62b295c286074a987527fb231e65d074f78b7a62a86cda4',
-  'c593a4e447f59817b4a2afdd577ac4c1ec8b24bf2a08fb6a9bd440024fb072f8',
-  '578bacd3e94ad10969a2deed6c9122c9b56a19446e004c8fb85d8bc1fdf4d241',
-  '1c4585d962a04bffaba0fdb7b9e5d23af7b161f9bd06b317f9a58b4d604bd87b',
-  '0083e395d58b28d19a004c6ef0b81303a9f9a2b58a47b06e2cd153dfde953be4',
-  'c1af74b4c898c8618cb1322bfce7739cfb34f89fd94f7fa59cc82757d275670a',
-  'b0a668e49120b05cd5f168c2b2d79dd10fa1d7ea1cf3e315a4c29d832384455a',
-  '5163029d5d8504600367735236cc888baeebafd1fbbd3e103d163f27b76528b6',
-  '0a62d2bb9c228050a12be28db847913082c7978cfff8d159426e1ba25acdeabc',
-  '99b3b6a1e69b864bde30b25236c1318e11576e8812e0d3f3a362e0ebf1523e17',
-  '3da01309cedafd15d4adde0b810a249f29a08e5bb52ab66e2c247e4208d6be3e',
-  'dd632995370927bcb50ec78f2625ec380f58f6d84e24786cbb5da2ab39457089',
-  '28358596f46a759408c42a0ac1868c6963e894bc1338de92de943f0b922ba590',
-  '014865035c355556033de3a0109b6a5e6111dfcc601650796374fc00c0dfd062',
-  '9045cca9d7463f67a52ccd787dfa0f27b0e8e82614e927482fbe45aa1a57385f',
-  '116633d4bb3ead5d11ed1e1801b13c0e123fd73a88df82b31ab3dab65f795e17',
-  'afa016496f524f6f75cdfc8fd196f4cf504c39e1ec5e68f2723e0cb0a27f02e1',
-  'c9e0486fdc6a529331083afd89a1b3aef8fa3c2f8a6b9d17980983583b8f88b7',
-  'caae990b663e1c61f04467b9881df0f708bfdfeb631a99c16ad207fa1fef9a76',
-  '0aee1ea051bb292d56310732a112195f2c64a52f8bd10bef7957fdde9a9bf4e4',
-  '869ceb706e856267e665c21c612b171fea3bb48a37797917cfd5b1d3a8727c21',
-  '5b85dc83f6362ae1cfd913092cd4a05e45eb9ed43cd058035c41353796f88093',
-  '26ca82a9e6071acaffc69a0e9156c0ae3ed9d16ef8de89c9fd65b095c8f7958d',
-  'f62668a08484e11f27556253d3e49556389517938a88ded9c2b7593aaba5f59f',
-  'bd7769cd2ff0c2886dd856960e3109a0a315515f44c694c9cc334d70aaaa7aaa',
-  '626638f4554a8338ed928c1eb9c47333c07f199e0fa1b299f6271ad133cfe1d3',
-  'bc5bca701904006aebb2f0cdb80d533d2c309184fb90e781526e326d24aaa189',
-  '853f454a5db1cd155f89ca4f7251af572c3fea705792d0038cc7eb052efec7cc'
+  '0x5808743c21cc1d53b62b295c286074a987527fb231e65d074f78b7a62a86cda4',
+  '0xc593a4e447f59817b4a2afdd577ac4c1ec8b24bf2a08fb6a9bd440024fb072f8',
+  '0x578bacd3e94ad10969a2deed6c9122c9b56a19446e004c8fb85d8bc1fdf4d241',
+  '0x1c4585d962a04bffaba0fdb7b9e5d23af7b161f9bd06b317f9a58b4d604bd87b',
+  '0x0083e395d58b28d19a004c6ef0b81303a9f9a2b58a47b06e2cd153dfde953be4',
+  '0xc1af74b4c898c8618cb1322bfce7739cfb34f89fd94f7fa59cc82757d275670a',
+  '0xb0a668e49120b05cd5f168c2b2d79dd10fa1d7ea1cf3e315a4c29d832384455a',
+  '0x5163029d5d8504600367735236cc888baeebafd1fbbd3e103d163f27b76528b6',
+  '0x0a62d2bb9c228050a12be28db847913082c7978cfff8d159426e1ba25acdeabc',
+  '0x99b3b6a1e69b864bde30b25236c1318e11576e8812e0d3f3a362e0ebf1523e17',
+  '0x3da01309cedafd15d4adde0b810a249f29a08e5bb52ab66e2c247e4208d6be3e',
+  '0xdd632995370927bcb50ec78f2625ec380f58f6d84e24786cbb5da2ab39457089',
+  '0x28358596f46a759408c42a0ac1868c6963e894bc1338de92de943f0b922ba590',
+  '0x014865035c355556033de3a0109b6a5e6111dfcc601650796374fc00c0dfd062',
+  '0x9045cca9d7463f67a52ccd787dfa0f27b0e8e82614e927482fbe45aa1a57385f',
+  '0x116633d4bb3ead5d11ed1e1801b13c0e123fd73a88df82b31ab3dab65f795e17',
+  '0xafa016496f524f6f75cdfc8fd196f4cf504c39e1ec5e68f2723e0cb0a27f02e1',
+  '0xc9e0486fdc6a529331083afd89a1b3aef8fa3c2f8a6b9d17980983583b8f88b7',
+  '0xcaae990b663e1c61f04467b9881df0f708bfdfeb631a99c16ad207fa1fef9a76',
+  '0x0aee1ea051bb292d56310732a112195f2c64a52f8bd10bef7957fdde9a9bf4e4',
+  '0x869ceb706e856267e665c21c612b171fea3bb48a37797917cfd5b1d3a8727c21',
+  '0x5b85dc83f6362ae1cfd913092cd4a05e45eb9ed43cd058035c41353796f88093',
+  '0x26ca82a9e6071acaffc69a0e9156c0ae3ed9d16ef8de89c9fd65b095c8f7958d',
+  '0xf62668a08484e11f27556253d3e49556389517938a88ded9c2b7593aaba5f59f',
+  '0xbd7769cd2ff0c2886dd856960e3109a0a315515f44c694c9cc334d70aaaa7aaa',
+  '0x626638f4554a8338ed928c1eb9c47333c07f199e0fa1b299f6271ad133cfe1d3',
+  '0xbc5bca701904006aebb2f0cdb80d533d2c309184fb90e781526e326d24aaa189',
+  '0x853f454a5db1cd155f89ca4f7251af572c3fea705792d0038cc7eb052efec7cc'
 ]
 
 const GeneratePage = () => {
@@ -63,8 +63,8 @@ const GeneratePage = () => {
   const [privateKeyInput, setPrivateKeyInput] = useState('')
   const [seedPhrase, setSeedPhrase] = useState('')
   const [seedLength, setSeedLength] = useState(12)
-  const [rangeMin, setRangeMin] = useState('0000000000000000000000000000000000000000000000000000000000000000')
-  const [rangeMax, setRangeMax] = useState('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
+  const [rangeMin, setRangeMin] = useState('0x0000000000000000000000000000000000000000000000000000000000000000')
+  const [rangeMax, setRangeMax] = useState('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
   
   // Predefined private keys states
   const [showPredefinedKeys, setShowPredefinedKeys] = useState(false)
@@ -430,7 +430,14 @@ const GeneratePage = () => {
                   <input
                     type="text"
                     value={privateKeyInput}
-                    onChange={(e) => setPrivateKeyInput(e.target.value)}
+                    onChange={(e) => {
+                      let value = e.target.value
+                      // Auto-add 0x prefix if not present
+                      if (value && !value.startsWith('0x')) {
+                        value = '0x' + value
+                      }
+                      setPrivateKeyInput(value)
+                    }}
                     placeholder="0x..."
                     className="input-field"
                   />
@@ -535,8 +542,15 @@ const GeneratePage = () => {
                   <input
                     type="text"
                     value={rangeMin}
-                    onChange={(e) => setRangeMin(e.target.value.toLowerCase())}
-                    placeholder="0000000000000000000000000000000000000000000000000000000000000000"
+                    onChange={(e) => {
+                      let value = e.target.value.toLowerCase()
+                      // Auto-add 0x prefix if not present
+                      if (value && !value.startsWith('0x')) {
+                        value = '0x' + value
+                      }
+                      setRangeMin(value)
+                    }}
+                    placeholder="0x0000000000000000000000000000000000000000000000000000000000000000"
                     className="input-field font-mono text-sm"
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -550,8 +564,15 @@ const GeneratePage = () => {
                   <input
                     type="text"
                     value={rangeMax}
-                    onChange={(e) => setRangeMax(e.target.value.toLowerCase())}
-                    placeholder="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                    onChange={(e) => {
+                      let value = e.target.value.toLowerCase()
+                      // Auto-add 0x prefix if not present
+                      if (value && !value.startsWith('0x')) {
+                        value = '0x' + value
+                      }
+                      setRangeMax(value)
+                    }}
+                    placeholder="0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
                     className="input-field font-mono text-sm"
                   />
                   <p className="text-xs text-gray-500 mt-1">
@@ -563,8 +584,8 @@ const GeneratePage = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setRangeMin('0000000000000000000000000000000000000000000000000000000000000000')
-                    setRangeMax('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
+                    setRangeMin('0x0000000000000000000000000000000000000000000000000000000000000000')
+                    setRangeMax('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
                   }}
                   className="btn-secondary text-sm"
                 >
@@ -573,8 +594,8 @@ const GeneratePage = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setRangeMin('0000000000000000000000000000000000000000000000000000000000000001')
-                    setRangeMax('0000000000000000000000000000000000000000000000000000000000000fff')
+                    setRangeMin('0x0000000000000000000000000000000000000000000000000000000000000001')
+                    setRangeMax('0x0000000000000000000000000000000000000000000000000000000000000fff')
                   }}
                   className="btn-secondary text-sm"
                 >
@@ -618,6 +639,9 @@ const GeneratePage = () => {
             )}
             <p className="text-sm text-gray-500 mt-1">
               Ước tính tổng số wallet có thể tạo: {getEstimatedTotalWallets()}
+            </p>
+            <p className="text-sm text-gray-500">
+              Số lượng hiện tại: {walletCount.toLocaleString()} wallet
             </p>
           </div>
         </div>
@@ -691,13 +715,13 @@ const GeneratePage = () => {
           {progress.isComplete && (
             <div className="space-y-2">
               <p className="text-sm text-green-600 font-medium">
-                Hoàn thành! Đã tạo {progress.total} private key.
+                Hoàn thành! Đã tạo {progress.total.toLocaleString()} private key.
               </p>
-              {matchedWallets.length > 0 && (
-                <p className="text-sm text-orange-600 font-medium">
-                  🎯 Tìm thấy {matchedWallets.length} wallet trùng khớp với targets!
-                </p>
-              )}
+                              {matchedWallets.length > 0 && (
+                  <p className="text-sm text-orange-600 font-medium">
+                    🎯 Tìm thấy {matchedWallets.length.toLocaleString()} wallet trùng khớp với targets!
+                  </p>
+                )}
               <p className="text-sm text-gray-600">
                 Đã tải xuống: wallet_datetime.txt và {matchedWallets.length > 0 ? 'expected_result_datetime.txt' : ''}
               </p>
@@ -711,7 +735,7 @@ const GeneratePage = () => {
         <div className="space-y-6">
           {/* All Generated Wallets */}
           <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Tất cả Wallet đã tạo ({generatedWallets.length})</h3>
+            <h3 className="text-lg font-semibold mb-4">Tất cả Wallet đã tạo ({generatedWallets.length.toLocaleString()})</h3>
             <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
               <div className="text-sm font-mono space-y-1">
                 {generatedWallets.slice(-100).map((wallet, index) => (
@@ -722,7 +746,7 @@ const GeneratePage = () => {
                 ))}
                 {generatedWallets.length > 100 && (
                   <p className="text-gray-500 text-center mt-2">
-                    ... và {generatedWallets.length - 100} private key khác (chỉ hiển thị 100 cuối cùng)
+                    ... và {(generatedWallets.length - 100).toLocaleString()} private key khác (chỉ hiển thị 100 cuối cùng)
                   </p>
                 )}
               </div>
@@ -733,7 +757,7 @@ const GeneratePage = () => {
           {matchedWallets.length > 0 && (
             <div className="card border-orange-200 bg-orange-50">
               <h3 className="text-lg font-semibold mb-4 text-orange-800">
-                🎯 Wallet trùng khớp với Targets ({matchedWallets.length})
+                🎯 Wallet trùng khớp với Targets ({matchedWallets.length.toLocaleString()})
               </h3>
               <div className="bg-white rounded-lg p-4 max-h-96 overflow-y-auto border border-orange-200">
                 <div className="text-sm font-mono space-y-1">
@@ -756,10 +780,10 @@ const GeneratePage = () => {
             <h3 className="text-lg font-semibold mb-4 text-blue-800">Thông tin Targets</h3>
             <div className="space-y-2">
               <p className="text-sm text-blue-700">
-                📁 Đã tải {targets.length} targets từ file targets.txt
+                📁 Đã tải {targets.length.toLocaleString()} targets từ file targets.txt
               </p>
               <p className="text-sm text-blue-700">
-                🔍 So sánh với {generatedWallets.length} wallet đã tạo
+                🔍 So sánh với {generatedWallets.length.toLocaleString()} wallet đã tạo
               </p>
               <p className="text-sm text-blue-700">
                 📊 Tỷ lệ trùng khớp: {generatedWallets.length > 0 ? ((matchedWallets.length / generatedWallets.length) * 100).toFixed(6) : 0}%
