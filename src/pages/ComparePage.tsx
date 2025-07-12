@@ -12,6 +12,7 @@ interface FileData {
 interface CompareResult {
   wallet: Wallet
   foundInFiles: string[]
+  duplicateCount: number
 }
 
 const ComparePage = () => {
@@ -20,6 +21,7 @@ const ComparePage = () => {
   const [results, setResults] = useState<CompareResult[]>([])
   const [error, setError] = useState<string>('')
   const [maxFiles] = useState(20)
+  const [compareMode, setCompareMode] = useState<'all' | 'any'>('any') // 'all' = xuất hiện trong tất cả files, 'any' = xuất hiện trong bất kỳ file nào
 
   // Initialize with 2 empty file slots
   useEffect(() => {
@@ -83,27 +85,66 @@ const ComparePage = () => {
         return { fileData, addressMap }
       })
 
-      // Find wallets that appear in ALL files
+      // Find matching wallets based on compare mode
       const matchingWallets: CompareResult[] = []
       
-      // Use the first file as reference
-      const firstFile = addressMaps[0]
-      console.log(`Using first file as reference: ${firstFile.fileData.name} with ${firstFile.addressMap.size} addresses`)
-      
-      firstFile.addressMap.forEach((wallet, address) => {
-        // Check if this address exists in ALL other files
-        const foundInAllFiles = addressMaps.every(({ addressMap }) => {
-          return addressMap.has(address)
-        })
-
-        if (foundInAllFiles) {
-          const foundInFiles = validFiles.map(f => f.name)
-          matchingWallets.push({
-            wallet,
-            foundInFiles
+      if (compareMode === 'all') {
+        // Find wallets that appear in ALL files
+        const firstFile = addressMaps[0]
+        console.log(`Using first file as reference: ${firstFile.fileData.name} with ${firstFile.addressMap.size} addresses`)
+        
+        firstFile.addressMap.forEach((wallet, address) => {
+          // Check if this address exists in ALL other files
+          const foundInAllFiles = addressMaps.every(({ addressMap }) => {
+            return addressMap.has(address)
           })
-        }
-      })
+
+          if (foundInAllFiles) {
+            const foundInFiles = validFiles.map(f => f.name)
+            matchingWallets.push({
+              wallet,
+              foundInFiles,
+              duplicateCount: foundInFiles.length
+            })
+          }
+        })
+      } else {
+        // Find wallets that appear in ANY file (duplicates across files)
+        const allAddresses = new Map<string, { wallet: Wallet, foundInFiles: string[], privateKeys: string[] }>()
+        
+        validFiles.forEach((fileData) => {
+          fileData.wallets.forEach(wallet => {
+            const address = wallet.address.toLowerCase()
+            
+            if (allAddresses.has(address)) {
+              // Address already exists, add this file to the list
+              const existing = allAddresses.get(address)!
+              if (!existing.foundInFiles.includes(fileData.name)) {
+                existing.foundInFiles.push(fileData.name)
+                existing.privateKeys.push(wallet.privateKey)
+              }
+            } else {
+              // New address
+              allAddresses.set(address, {
+                wallet,
+                foundInFiles: [fileData.name],
+                privateKeys: [wallet.privateKey]
+              })
+            }
+          })
+        })
+        
+        // Filter addresses that appear in multiple files
+        allAddresses.forEach((data) => {
+          if (data.foundInFiles.length > 1) {
+            matchingWallets.push({
+              wallet: data.wallet,
+              foundInFiles: data.foundInFiles,
+              duplicateCount: data.foundInFiles.length
+            })
+          }
+        })
+      }
 
       console.log(`Found ${matchingWallets.length} matching wallets`)
       setResults(matchingWallets)
@@ -175,9 +216,44 @@ const ComparePage = () => {
         <h1 className="text-2xl font-bold text-gray-900 mb-6">So sánh Files Wallet</h1>
         
         <p className="text-gray-600 mb-6">
-          Tải lên 2-20 files txt chứa private key và wallet address để tìm các wallet trùng nhau.
+          Tải lên 2-20 files txt chứa private key và wallet address để tìm các wallet trùng lặp.
           Format: <code className="bg-gray-100 px-2 py-1 rounded">private_key - wallet_address</code>
+          <br />
+          <span className="text-sm text-blue-600">💡 Tìm bất kỳ wallet nào xuất hiện từ 2 lần trở lên trong các files</span>
         </p>
+
+        {/* Compare Mode Selection */}
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Chế độ so sánh:
+          </label>
+          <div className="flex space-x-4">
+            <label className="flex items-center">
+              <input
+                type="radio"
+                value="all"
+                checked={compareMode === 'all'}
+                onChange={(e) => setCompareMode(e.target.value as 'all' | 'any')}
+                className="mr-2"
+              />
+              <span className="text-sm">
+                <strong>Xuất hiện trong TẤT CẢ files</strong> - Tìm wallet có trong mọi file đã tải
+              </span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                value="any"
+                checked={compareMode === 'any'}
+                onChange={(e) => setCompareMode(e.target.value as 'all' | 'any')}
+                className="mr-2"
+              />
+              <span className="text-sm">
+                <strong>Xuất hiện trong BẤT KỲ file nào</strong> - Tìm wallet trùng lặp giữa các files
+              </span>
+            </label>
+          </div>
+        </div>
 
         {/* File Controls */}
         <div className="flex items-center space-x-4 mb-6">
@@ -303,6 +379,7 @@ const ComparePage = () => {
         <div className="card border-green-200 bg-green-50">
           <h3 className="text-lg font-semibold mb-4 text-green-800">
             🎯 Wallet Trùng Khớp ({results.length.toLocaleString()})
+            {compareMode === 'all' ? ' - Xuất hiện trong TẤT CẢ files' : ' - Xuất hiện trong nhiều files'}
           </h3>
           
           <div className="overflow-x-auto">
@@ -312,7 +389,8 @@ const ComparePage = () => {
                   <th className="text-left py-2 px-2 text-green-800">#</th>
                   <th className="text-left py-2 px-2 text-green-800">Private Key</th>
                   <th className="text-left py-2 px-2 text-green-800">Wallet Address</th>
-                  <th className="text-left py-2 px-2 text-green-800">Xuất hiện trong</th>
+                  <th className="text-left py-2 px-2 text-green-800">Số lần xuất hiện</th>
+                  <th className="text-left py-2 px-2 text-green-800">Xuất hiện trong files</th>
                 </tr>
               </thead>
               <tbody>
@@ -324,6 +402,11 @@ const ComparePage = () => {
                     </td>
                     <td className="py-2 px-2 font-mono text-xs text-green-800">
                       {result.wallet.address}
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <span className="inline-block px-2 py-1 text-xs bg-red-100 text-red-800 rounded font-bold">
+                        {result.duplicateCount} lần
+                      </span>
                     </td>
                     <td className="py-2 px-2">
                       <div className="flex flex-wrap gap-1">
@@ -345,8 +428,11 @@ const ComparePage = () => {
           
           <div className="mt-4 p-3 bg-green-100 rounded-lg">
             <p className="text-green-800 text-sm">
-              💡 Tìm thấy {results.length.toLocaleString()} wallet xuất hiện trong tất cả {files.filter(f => f.file).length} files.
-              Đây là những wallet có cùng địa chỉ trong tất cả files đã tải.
+              💡 Tìm thấy {results.length.toLocaleString()} wallet 
+              {compareMode === 'all' 
+                ? ` xuất hiện trong tất cả ${files.filter(f => f.file).length} files. Đây là những wallet có cùng địa chỉ trong tất cả files đã tải.`
+                : ` xuất hiện trong nhiều files. Đây là những wallet trùng lặp giữa các files.`
+              }
             </p>
           </div>
         </div>
@@ -363,7 +449,10 @@ const ComparePage = () => {
               Không tìm thấy wallet trùng khớp
             </h3>
             <p className="text-gray-600">
-              Không có wallet nào xuất hiện trong tất cả {files.filter(f => f.file).length} files.
+              {compareMode === 'all' 
+                ? `Không có wallet nào xuất hiện trong tất cả ${files.filter(f => f.file).length} files.`
+                : `Không có wallet nào trùng lặp giữa các files.`
+              }
             </p>
             <div className="mt-4 text-sm text-gray-500">
               {files.filter(f => f.file).map((fileData, index) => (
@@ -381,8 +470,8 @@ const ComparePage = () => {
           <p>1. 📁 Tải lên 2-20 files txt chứa danh sách wallet (format: private_key - wallet_address)</p>
           <p>2. ➕ Sử dụng nút "Thêm file" để tăng số lượng files cần so sánh (tối đa 20 files)</p>
           <p>3. ➖ Sử dụng nút "Bớt file" để giảm số lượng files (tối thiểu 2 files)</p>
-          <p>4. 🔍 Nhấn "So sánh Files" để tìm wallet xuất hiện trong TẤT CẢ files</p>
-          <p>5. 📊 Kết quả sẽ hiển thị các wallet có cùng địa chỉ trong tất cả files đã tải</p>
+          <p>4. 🔍 Nhấn "So sánh Files" để tìm wallet trùng lặp giữa các files</p>
+          <p>5. 📊 Kết quả sẽ hiển thị wallet xuất hiện từ 2 lần trở lên và chính xác file nào chứa wallet đó</p>
           <p>6. 🎯 Nếu không có wallet trùng, sẽ hiển thị thông báo "Không tìm thấy wallet trùng khớp"</p>
         </div>
       </div>
